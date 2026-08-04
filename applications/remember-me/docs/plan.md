@@ -255,14 +255,14 @@ Kurallar:
 **Doğrulanacak Sonuçlar:**
 
 - Her otomatik girişte `token` değeri değişiyor, `series` sabit (BR-015/016).
-- Bayat token'lı istek: series'in tüm kayıtları siliniyor, istek reddediliyor, meşru tarayıcı da yeniden login'e düşüyor (BR-017/018).
+- Bayat token'lı istek: kullanıcının tüm series'lerine ait kayıtlar siliniyor (BR-018, Spring Security'nin yerleşik `removeUserTokens` davranışı — yalnızca çalınan series değil), istek reddediliyor, meşru tarayıcı da yeniden login'e düşüyor (BR-017/018).
 - Inspector, tablo durumunu yenileme sonrası ≤ 2 sn içinde yansıtıyor.
 
 **Test Adımları:**
 
 1. Persistent modda remember-me login → Inspector'da series/token'ı not et.
 2. `JSESSIONID` sil → sayfa yenile (otomatik giriş) → Inspector'da token değişti, series aynı.
-3. Remember-me cookie değerini kopyala → bir otomatik giriş daha tetikle (kopya bayatlar) → kopya değeri cookie'ye geri yaz → istek at → reddedildi, Inspector'da series'in kayıtları silindi.
+3. Remember-me cookie değerini kopyala → bir otomatik giriş daha tetikle (kopya bayatlar) → kopya değeri cookie'ye geri yaz → istek at → reddedildi, Inspector'da kullanıcının tüm series kayıtları silindi.
 4. Meşru tarayıcıda sayfa yenile → login sayfası (series iptalinin etkisi).
 5. Otomatik test: `PersistentTokenRepository` üzerinden rotasyon ve `CookieTheftException` senaryosu.
 

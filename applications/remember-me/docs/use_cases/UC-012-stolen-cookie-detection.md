@@ -5,7 +5,7 @@
 **Use Case ID:** UC-012
 **Use Case Name:** Stolen Cookie Detection
 **Primary Actor:** Öğrenen
-**Goal:** Geçerli series ancak bayat token taşıyan bir isteğin cookie hırsızlığı olarak algılanıp tüm series'in iptal edildiğini gözlemlemek
+**Goal:** Geçerli series ancak bayat token taşıyan bir isteğin cookie hırsızlığı olarak algılanıp kullanıcının tüm kalıcı hatırlanma kayıtlarının (tüm series'lerinin) iptal edildiğini gözlemlemek
 **Status:** Draft
 
 ## Preconditions
@@ -19,7 +19,7 @@
 2. Öğrenen meşru tarayıcıda oturumu düşürüp otomatik giriş yapar; sistem token değerini döndürür ve kopyadaki token bayatlar.
 3. Öğrenen kopyalanan (bayat) cookie ile korumalı bir sayfaya istek yapar.
 4. Sistem geçerli bir series ile eşleşmeyen bir token geldiğini tespit eder ve bunu cookie hırsızlığı olarak değerlendirir.
-5. Sistem o series'e ait tüm kalıcı kayıtları siler.
+5. Sistem, kullanıcıya ait tüm series'lerdeki kalıcı kayıtları siler (yalnızca çalınan series'i değil).
 6. Sistem isteği reddeder ve yeniden giriş ister.
 7. Öğrenen, meşru tarayıcıdan gelen sonraki isteğin de artık otomatik giriş yapamadığını görerek tespit mekanizmasını doğrular.
 
@@ -38,7 +38,7 @@
 
 ### Success Postconditions
 
-- İlgili series'e ait tüm kalıcı kayıtlar silinmiştir
+- Kullanıcının tüm series'lerine ait kalıcı kayıtlar silinmiştir (yalnızca çalınan series değil)
 - Hem bayat cookie hem meşru cookie ile otomatik giriş artık mümkün değildir; yeniden login gerekir
 - Öğrenen hırsızlık tespit davranışını gözlemlemiştir
 
@@ -52,6 +52,6 @@
 
 Geçerli bir series ile birlikte güncel olmayan bir token gelmesi cookie hırsızlığı olarak yorumlanır; istek asla kabul edilmez.
 
-### BR-018: Series Genelinde İptal
+### BR-018: Kullanıcı Genelinde İptal
 
-Hırsızlık tespitinde yalnızca ilgili istek değil, o series'e bağlı tüm hatırlanma kayıtları iptal edilir; kullanıcı her yerde yeniden giriş yapmak zorunda kalır.
+Hırsızlık tespitinde yalnızca ilgili istek veya ilgili series değil, kullanıcının sahip olduğu TÜM series'lere ait hatırlanma kayıtları iptal edilir; kullanıcı her yerde (tüm cihaz/tarayıcılarda) yeniden giriş yapmak zorunda kalır. Bu, Spring Security'nin `PersistentTokenBasedRememberMeServices` bileşeninin yerleşik (`removeUserTokens`) davranışıdır — daha dar, yalnızca çalınan series'i iptal eden bir davranış bilinçli olarak tercih edilmemiştir; kullanıcı genelinde iptal, olası bir hırsızlık karşısında daha önleyici bir duruş sağlar.
