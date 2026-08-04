@@ -41,6 +41,21 @@ import java.time.Instant;
  * generation sees the table. (Its unusual "entity with no repository,
  * mutated only by a third party underneath it" shape is a deliberate
  * consequence of that split, not an oversight.)
+ *
+ * <p><b>Faz 10 (UC-016/UC-017, FR-016/FR-017): {@link #boundIp}.</b> The one
+ * column added beyond {@code JdbcTokenRepositoryImpl}'s own four - nullable,
+ * so it coexists safely with that class's INSERT/UPDATE/SELECT statements,
+ * all of which name their columns explicitly rather than using
+ * {@code SELECT *} (verified against its source), meaning it never touches
+ * this column at all. Every read/write of {@code bound_ip} is application
+ * code's own responsibility: written by
+ * {@link IpBoundPersistentTokenBasedRememberMeServices#onLoginSuccess} when
+ * IP-binding is enabled, checked by that same class's
+ * {@code processAutoLoginCookie} override, and surfaced read-only by
+ * {@link TokenInspectorController} - see those classes' javadoc for the
+ * full mechanics. {@code varchar(45)} is long enough for the longest
+ * textual IPv6 representation (45 chars, per {@code getRemoteAddr()}'s
+ * possible output), not just IPv4's much shorter dotted-quad form.
  */
 @Entity
 @Table(name = "persistent_logins")
@@ -58,6 +73,9 @@ public class PersistentLogin {
 
     @Column(name = "last_used", nullable = false, columnDefinition = "timestamp")
     private Instant lastUsed;
+
+    @Column(name = "bound_ip", length = 45, nullable = true)
+    private String boundIp;
 
     protected PersistentLogin() {
         // JPA / schema-inference only - see class javadoc. No application

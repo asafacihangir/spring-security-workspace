@@ -7,9 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationTrustResolver;
 import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -116,6 +118,32 @@ import org.springframework.security.web.context.SecurityContextRepository;
  * change (see that class's javadoc for why both calls have to be explicit
  * in Spring Security 6 when the upgrade isn't done through a
  * {@code AbstractAuthenticationProcessingFilter} subclass).
+ *
+ * <p><b>Faz 10 (UC-016/UC-017, FR-016/FR-017): IP-bound persistent
+ * remember-me.</b> When {@code app.remember-me.strategy=persistent}, the
+ * {@code .rememberMe(...)} DSL below no longer calls {@code .tokenRepository(...)}
+ * to let {@code RememberMeConfigurer} build a stock
+ * {@code PersistentTokenBasedRememberMeServices} itself; instead it
+ * constructs {@link IpBoundPersistentTokenBasedRememberMeServices} directly
+ * and hands it to {@code .rememberMeServices(...)}. This is required, not
+ * a style choice: {@code RememberMeConfigurer} has no hook to substitute a
+ * custom subclass via {@code .tokenRepository(...)} (verified against its
+ * source - {@code createPersistentRememberMeServices} always {@code new}s
+ * the stock class), and its {@code validateInput()} throws
+ * ("Can not set rememberMeCookieName and custom rememberMeServices") if
+ * both {@code .rememberMeCookieName(...)} and {@code .rememberMeServices(...)}
+ * are called on the same configurer - which this app's custom cookie name
+ * (Faz 9, UC-015) would otherwise do. So the PERSISTENT branch below never
+ * calls {@code .rememberMeCookieName(...)}/{@code .rememberMeParameter(...)}/
+ * {@code .tokenValiditySeconds(...)} on the DSL at all; it applies the exact
+ * same three settings directly on the constructed instance
+ * ({@code setCookieName}/{@code setParameter}/{@code setTokenValiditySeconds}),
+ * mirroring exactly what {@code RememberMeConfigurer#getRememberMeServices}
+ * would otherwise have done for a DSL-created instance. The TOKEN branch is
+ * completely unchanged from Faz 3/6/9 - {@link IpBoundPersistentTokenBasedRememberMeServices}
+ * is never constructed, referenced, or relevant when that strategy is
+ * active (the Checkpoint 10 regression check). See that class's own javadoc
+ * for the IP-binding logic itself and the "persistent-only" scope decision.
  */
 @Configuration
 public class SecurityConfig {
@@ -227,8 +255,11 @@ public class SecurityConfig {
             @Value("${app.remember-me.key}") String rememberMeKey,
             @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds,
             @Value("${app.remember-me.strategy}") String rememberMeStrategy,
+            @Value("${app.remember-me.ip-binding-enabled:false}") boolean ipBindingEnabled,
             RememberMeNames rememberMeNames,
             PersistentTokenRepository persistentTokenRepository,
+            UserDetailsService userDetailsService,
+            JdbcTemplate jdbcTemplate,
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy) throws Exception {
         // Faz 7 fix-round: shared with both .exceptionHandling(...) below and
@@ -273,34 +304,48 @@ public class SecurityConfig {
                         })
                         .permitAll())
                 .rememberMe(remember -> {
-                    remember
-                            // BR-003: no `alwaysRemember` - a cookie is only ever issued
-                            // when the request actually carries this parameter with a
-                            // truthy value, i.e. the checkbox was checked.
-                            .key(rememberMeKey)
-                            // Faz 9 (UC-015, BR-022): both names come from the one
-                            // RememberMeNames bean - see its javadoc and this class's
-                            // javadoc "Custom names" section.
-                            .rememberMeParameter(rememberMeNames.parameterName())
-                            .rememberMeCookieName(rememberMeNames.cookieName())
-                            // Faz 4 (UC-005/BR-007): configurable instead of Spring's
-                            // hardcoded 14-day default, so validity can be turned down
-                            // (e.g. to 30s) to actually observe an expired cookie being
-                            // rejected instead of waiting two weeks for it to happen.
-                            .tokenValiditySeconds(rememberMeTokenValiditySeconds);
-                    // Faz 6 (UC-010, BR-013/BR-014): the one branch that decides
-                    // which RememberMeServices Spring Security actually builds -
-                    // see RememberMeConfigurer#createRememberMeServices(): calling
-                    // .tokenRepository(...) is what switches it from the default
-                    // TokenBasedRememberMeServices to
-                    // PersistentTokenBasedRememberMeServices; the TOKEN branch
-                    // below leaves Faz 3's behavior untouched by simply not calling
-                    // it. Every other .rememberMe(...) setting above is shared by
-                    // both strategies - this if/else is the entire difference
-                    // between the two modes, and it is driven purely by the
-                    // app.remember-me.strategy property value read above (BR-013).
+                    // Faz 6 (UC-010, BR-013/BR-014) / Faz 10 (UC-016/UC-017): the
+                    // one branch that decides which RememberMeServices Spring
+                    // Security actually ends up using. TOKEN keeps Faz 3/9's
+                    // exact behavior (BR-003's no-alwaysRemember, Faz 9's custom
+                    // names, Faz 4's configurable validity - all applied to the
+                    // DSL as before). PERSISTENT can no longer go through
+                    // .tokenRepository(...) once IP-binding needs a custom
+                    // RememberMeServices subclass - see this class's javadoc
+                    // "Faz 10" section and IpBoundPersistentTokenBasedRememberMeServices's
+                    // javadoc for the full reasoning and mechanics.
                     if (RememberMeStrategy.from(rememberMeStrategy) == RememberMeStrategy.PERSISTENT) {
-                        remember.tokenRepository(persistentTokenRepository);
+                        IpBoundPersistentTokenBasedRememberMeServices ipBoundServices =
+                                new IpBoundPersistentTokenBasedRememberMeServices(
+                                        rememberMeKey, userDetailsService, persistentTokenRepository,
+                                        jdbcTemplate, ipBindingEnabled);
+                        // Mirrors exactly what RememberMeConfigurer#getRememberMeServices
+                        // would otherwise have applied to a DSL-created instance -
+                        // see this class's javadoc for why these three calls have
+                        // to happen here instead of on the `remember` DSL.
+                        ipBoundServices.setParameter(rememberMeNames.parameterName());
+                        ipBoundServices.setCookieName(rememberMeNames.cookieName());
+                        ipBoundServices.setTokenValiditySeconds(rememberMeTokenValiditySeconds);
+                        ipBoundServices.afterPropertiesSet();
+                        remember.rememberMeServices(ipBoundServices);
+                    } else {
+                        remember
+                                // BR-003: no `alwaysRemember` - a cookie is only ever
+                                // issued when the request actually carries this
+                                // parameter with a truthy value, i.e. the checkbox
+                                // was checked.
+                                .key(rememberMeKey)
+                                // Faz 9 (UC-015, BR-022): both names come from the one
+                                // RememberMeNames bean - see its javadoc and this
+                                // class's javadoc "Custom names" section.
+                                .rememberMeParameter(rememberMeNames.parameterName())
+                                .rememberMeCookieName(rememberMeNames.cookieName())
+                                // Faz 4 (UC-005/BR-007): configurable instead of
+                                // Spring's hardcoded 14-day default, so validity can
+                                // be turned down (e.g. to 30s) to actually observe an
+                                // expired cookie being rejected instead of waiting two
+                                // weeks for it to happen.
+                                .tokenValiditySeconds(rememberMeTokenValiditySeconds);
                     }
                 })
                 .logout(logout -> logout

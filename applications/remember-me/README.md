@@ -216,6 +216,87 @@ isteğinin gövdesinde `keep-me=true` parametresini gör. Logout sonrası
 `notes-rm` cookie'si `Max-Age=0` ile temizlenmiş olmalı (Faz 3'ün logout
 davranışının bu özel isimle de çalıştığının regresyon kontrolü).
 
+## IP-Bound Remember-Me (UC-016, UC-017)
+
+`app.remember-me.strategy=persistent` iken (bkz. yukarısı), ayrıca
+`app.remember-me.ip-binding-enabled=true` yapılırsa (varsayılan `false`),
+her yeni "Remember Me" girişi **istemci IP'sine bağlanır**
+(`persistent_logins.bound_ip`): sonraki her otomatik girişte istek IP'si bu
+kayıtla karşılaştırılır, uyuşmuyorsa istek reddedilir (temiz bir 401 - login
+sayfasına düşer, 500 değil) ve login yeniden istenir (BR-023). Bu, Faz 6/7'nin
+persistent stratejisi üzerine inşa edilen ve Spring Security'de hazır bir
+karşılığı olmayan tamamen özel bir mantıktır - bkz.
+`IpBoundPersistentTokenBasedRememberMeServices`'in javadoc'u.
+
+**Kapsam:** yalnızca `persistent` strateji için - token-based (stateless,
+HMAC-imzalı) cookie'nin sunucu tarafında hiçbir kaydı yok, bağlanacak bir IP
+tutacak yer de yok; `token` stratejisi bu özellikten tamamen etkilenmedi
+(`app.remember-me.ip-binding-enabled`'ın o modda hiçbir etkisi yok - bkz.
+`IpBindingDisabledTests`).
+
+**IP kaynağı:** `HttpServletRequest.getRemoteAddr()` - `X-Forwarded-For` gibi
+proxy başlıkları değil, çünkü bu uygulamanın önünde güvenilir bir reverse
+proxy yok; o başlığı güvenmek istemcinin kendi IP'sini iddia etmesine izin
+verir ve bağlamanın amacını tamamen ortadan kaldırırdı.
+
+Token Inspector'da yeni bir **"Bağlı IP"** sütunu var: binding açıkken ve
+kayıt bir IP'ye bağlıyken o IP görünür; binding kapalıyken (veya kayıt bu
+özellikten önce oluşturulmuşsa) hücre asla boş bırakılmaz - açıkça
+**"IP'ye bağlı değil"** yazar (BR-024, UC-017 A1).
+
+### Farklı IP Simülasyonu - Elle Test İçin Ne Gerçekten Çalışıyor
+
+Bu, bu lab'daki en zor elle-doğrulanacak senaryo: tek bir geliştirme
+makinesinde **gerçekten** iki farklı istemci IP'si üretmek genellikle mümkün
+değil. Aşağıdakiler bu ortamda fiilen denendi, sonuçlarıyla birlikte:
+
+- **`localhost` vs `127.0.0.1` - bu makinede işe yaradı, ama garanti değil.**
+  `curl http://localhost:8080/...` bu makinede `localhost`'u IPv6 loopback'e
+  (`::1`) çözdü, `curl http://127.0.0.1:8080/...` ise IPv4 loopback'e
+  (`127.0.0.1`) - Tomcat/Spring bu ikisini `getRemoteAddr()` üzerinden
+  **gerçekten farklı iki string** olarak görüyor. Bu README'nin
+  hazırlanması sırasında uçtan uca elle doğrulandı (`curl` ile): `keep-me=true`
+  ile `localhost` üzerinden giriş → `persistent_logins.bound_ip` = `0:0:0:0:0:0:0:1`
+  olarak kaydedildi; aynı cookie ile tekrar `localhost` üzerinden otomatik
+  giriş → kabul edildi (200, token rotasyona uğradı); rotasyona uğramış
+  cookie ile `127.0.0.1` üzerinden istek → reddedildi (401, `notes-rm`
+  cookie'si iptal edildi, DB'deki token/seri **değişmeden** kaldı); hemen
+  ardından aynı cookiye `localhost`'tan tekrar istek → yine kabul edildi
+  (reddedilen çapraz-IP denemesinin meşru sahibin kaydını bozmadığının
+  kanıtı - bkz. `IpBoundPersistentTokenBasedRememberMeServices.processAutoLoginCookie`'nin
+  javadoc'undaki "Ordering" bölümü). **Ama bu, işletim sistemi/DNS
+  çözümlemesinin `localhost`'u IPv6'ya, `127.0.0.1`'i IPv4'e ayırmasına
+  bağlı** - başka bir makinede (ör. IPv6 loopback'i devre dışı bir sistemde)
+  ikisi de aynı stringe (`127.0.0.1`) çözülebilir ve bu numara işe yaramaz;
+  denemeden önce iki adresin gerçekten farklı `getRemoteAddr()` değeri
+  ürettiğini (ör. Token Inspector'daki `boundIp` sütunundan) doğrula.
+- **Tarayıcıdan elle:** tarayıcı sekmesinde `http://localhost:5173`
+  (frontend, `/api` proxy'siyle backend'e `localhost:8080` üzerinden gider)
+  ile giriş yap, sonra DevTools'tan `notes-rm` cookie değerini kopyalayıp
+  `http://127.0.0.1:8080/api/me`'ye doğrudan `curl` ile (yukarıdaki gibi)
+  oynat - saf tarayıcı-içi bir simülasyon pratik değil, çünkü tarayıcı aynı
+  cookie'yi iki farklı origin'e (`localhost` vs `127.0.0.1`) otomatik
+  taşımaz (ayrı origin'ler, ayrı cookie jar'ları); `curl` bu sınırı olmadan
+  çalışır.
+- **Denenmedi ama gerçek bir alternatif:** backend'i `server.address=0.0.0.0`
+  ile başlatıp aynı ağdaki ikinci bir cihazdan (telefon, başka bir bilgisayar)
+  makinenin LAN IP'sine istek atmak - bu, "gerçekten iki farklı istemli IP'si"
+  üreten tek yöntemdir, ama bu ortamda ikinci bir cihaz mevcut olmadığı için
+  bu rapor kapsamında fiilen denenmedi; yalnızca yukarıdaki `localhost` vs
+  `127.0.0.1` yöntemi ve aşağıdaki otomatik testler fiilen çalıştırıldı.
+- **Otomatik test - tek gerçekten güvenilir yöntem.** `IpBoundRememberMeTests`
+  ve `IpBindingDisabledTests`, Spring'in
+  `MockHttpServletRequestBuilder.remoteAddress(String)`'i ile
+  `getRemoteAddr()`'ı doğrudan, gerçek bir ağ yolu gerekmeden sahtesini
+  üreterek ayarlıyor - aynı/farklı IP karşılaştırmasını hiçbir ortam
+  varsayımına bağlı olmadan, deterministik biçimde kapsıyorlar. Bu dosyaların
+  kapsadığı senaryolar: kayıt oluşurken IP'nin yazılması, aynı IP'den
+  otomatik giriş (A1), farklı IP'den red (ana senaryo/BR-023), reddedilen
+  denemenin satırı/token'ı bozmadığı, Token Inspector'ın `boundIp`'i
+  doğru yansıttığı, binding kapalıyken farklı IP'nin kabul edildiği (A2) ve
+  `token` stratejisinde bu property'nin hiçbir etkisinin olmadığı
+  (regresyon).
+
 ## Dokümantasyon
 
 - [vision.md](docs/vision.md) — ürün vizyonu

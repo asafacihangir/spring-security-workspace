@@ -43,12 +43,22 @@ import org.springframework.web.bind.annotation.RestController;
  * back empty - so every response carries {@code strategy} alongside
  * {@code records}, and the query only runs at all when persistent mode is
  * active.
+ *
+ * <p><b>Faz 10 (UC-017, FR-017, BR-024):</b> {@code bound_ip} is read
+ * alongside the four columns Faz 7 already selected, straight into
+ * {@link TokenInspectorRecord#boundIp} - {@code null} passes straight
+ * through unchanged ({@code ResultSet.getString} on a SQL {@code NULL}
+ * column returns Java {@code null}, not an empty string), and it is the
+ * frontend, not this controller, that turns that {@code null} into UC-017
+ * A1's explicit "not IP-bound" marker (see {@code TokenInspectorPage.jsx}).
+ * No new query, no new endpoint, no strategy-flag change - this is the
+ * exact same read path Faz 7 built, one column wider.
  */
 @RestController
 public class TokenInspectorController {
 
     private static final String SELECT_ALL_SQL =
-            "select username, series, token, last_used from persistent_logins order by last_used desc";
+            "select username, series, token, last_used, bound_ip from persistent_logins order by last_used desc";
 
     private final JdbcTemplate jdbcTemplate;
     private final String rememberMeStrategyProperty;
@@ -67,7 +77,8 @@ public class TokenInspectorController {
                         rs.getString("username"),
                         rs.getString("series"),
                         rs.getString("token"),
-                        rs.getTimestamp("last_used").toInstant()))
+                        rs.getTimestamp("last_used").toInstant(),
+                        rs.getString("bound_ip")))
                 : List.of();
         return new TokenInspectorResponse(strategy.name(), records);
     }

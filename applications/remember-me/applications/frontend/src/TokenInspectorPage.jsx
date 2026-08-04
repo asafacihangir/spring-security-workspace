@@ -14,6 +14,13 @@ import { apiGet } from './api'
 // A1/A2: both driven off the response's `strategy` field, never inferred
 // from `records` being empty - see TokenInspectorResponse.java for why an
 // empty list alone can't tell the two apart.
+//
+// Faz 10 (UC-017, BR-024): the "Bağlı IP" column below turns each record's
+// `boundIp` into either the actual IP or an explicit "IP'ye bağlı değil"
+// marker - never a blank cell. `boundIp` is `null` whenever IP-binding was
+// off when that record was created (or the record predates the feature) -
+// see TokenInspectorRecord.java. This is a per-record fact, independent of
+// whatever app.remember-me.ip-binding-enabled is set to right now.
 function TokenInspectorPage({ onBack }) {
   const [strategy, setStrategy] = useState(null)
   const [records, setRecords] = useState([])
@@ -86,6 +93,7 @@ function TokenInspectorPage({ onBack }) {
               <th>Series</th>
               <th>Token</th>
               <th>Son Kullanım</th>
+              <th>Bağlı IP</th>
             </tr>
           </thead>
           <tbody>
@@ -95,6 +103,7 @@ function TokenInspectorPage({ onBack }) {
                 <td>{record.series}</td>
                 <td>{record.token}</td>
                 <td>{record.lastUsed}</td>
+                <td>{record.boundIp ?? "IP'ye bağlı değil"}</td>
               </tr>
             ))}
           </tbody>
