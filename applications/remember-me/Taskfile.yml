@@ -29,3 +29,10 @@ tasks:
     cmds:
       - test -d node_modules || npm install
       - npm run dev
+
+  frontend:build:
+    desc: Build the frontend for production (Vite)
+    dir: applications/frontend
+    cmds:
+      - test -d node_modules || npm install
+      - npm run build

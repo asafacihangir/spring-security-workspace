@@ -5,10 +5,32 @@ uçtan uca deneyebileceğimiz bir demo uygulama. Kullanıcı adı/şifre ile gir
 yapar, notlarını yönetir, "Remember Me" ile oturumu hayatta tutar ve
 Token Inspector üzerinden arka planda ne olduğunu izler.
 
-Bu commit yalnızca **Faz 0 — Altyapı ve İskelet**'i içerir: kimlik doğrulama
-mantığı henüz yok, sadece MySQL + backend + frontend'in birlikte ayağa
-kalktığı boş bir iskelet var. Sonraki fazlar için bkz.
-[docs/plan.md](docs/plan.md).
+Tüm 11 faz tamamlandı (bkz. [docs/plan.md](docs/plan.md)). Bu uygulama
+aşağıdakilerin hepsini uçtan uca gösterir:
+
+- Form login (kullanıcı adı/şifre) ve BCrypt ile güvenli şifre saklama.
+- İsteğe bağlı "Remember Me" ile **token-based** (stateless, HMAC imzalı)
+  veya **persistent** (veritabanı destekli, `persistent_logins` tablosu)
+  remember-me - ikisi arasında geçiş tamamen konfigürasyonla yapılır (bkz.
+  "Strateji Seçimi" bölümü).
+- Logout: hem oturumu hem remember-me cookie'sini/kaydını geçersiz kılar.
+- UI'da anlık authentication seviyesi göstergesi (Anonymous / Remembered /
+  Fully Authenticated).
+- `isFullyAuthenticated()` ile korunan Account Settings sayfası ve
+  remembered bir oturumu şifreyle yeniden yükselten re-authentication akışı.
+- Persistent moddaki kayıtları canlı gösteren bir **Token Inspector** sayfası
+  (kimlik doğrulama gerektirmez - bkz. aşağıdaki uyarı).
+- Token rotasyonu (her otomatik girişte token değişir, series sabit kalır)
+  ve çalıntı cookie tespiti (bayat token → tüm series'ler iptal).
+- Süresi dolmuş `persistent_logins` satırlarını temizleyen zamanlanmış bir
+  arka plan işi.
+- Özel remember-me cookie/parametre isimleri (`notes-rm` / `keep-me`).
+- İsteğe bağlı IP-bound remember-me ve Token Inspector'da IP görünürlüğü.
+- CSRF koruması (`XSRF-TOKEN` cookie + `X-XSRF-TOKEN` header), tüm
+  mutating (POST/PUT/DELETE) uçlarda etkin.
+
+Faz faz nasıl inşa edildiği için bkz. [docs/plan.md](docs/plan.md); her
+use case'in tam senaryosu için bkz. [docs/use_cases/](docs/use_cases/).
 
 ## Mimari
 
@@ -41,9 +63,36 @@ task backend:run
 task frontend:run
 ```
 
-Frontend açıldığında "Check backend health" butonuna basarak backend'e
-`/api/health` isteği atabilirsin; Vite dev server bu isteği proxy ile
-`http://localhost:8080/api/health` adresine yönlendirir.
+Frontend açıldığında (`http://localhost:5173`) bir login formu (kullanıcı
+adı, şifre, "Beni hatırla" kutusu) ve altında bir "Token Inspector" butonu
+görürsün. Giriş için demo hesabı kullan:
+
+- **Kullanıcı adı:** `demo`
+- **Şifre:** `password123`
+
+Bu hesap `DemoUserSeeder` tarafından backend her başladığında otomatik
+olarak seed edilir (henüz yoksa oluşturulur - bkz.
+`DemoUserSeeder.java`); ayrıca elle bir kayıt oluşturman gerekmez.
+
+## Strateji Seçimi (UC-010)
+
+Bu uygulama iki remember-me stratejisini tek bir property ile değiştirir -
+`applications/backend/src/main/resources/application.properties` içindeki
+`app.remember-me.strategy`:
+
+- **`token`** (varsayılan) - stateless, HMAC imzalı cookie
+  (`TokenBasedRememberMeServices`). Sunucu tarafında hiçbir kayıt tutulmaz;
+  Token Inspector, Rotasyon (UC-011), Çalıntı Cookie Tespiti (UC-012) ve
+  IP-Bound Remember-Me (UC-016/UC-017) bölümlerinin hepsi bu modda anlamsız
+  kalır (Inspector "token-based strateji aktif" mesajı gösterir).
+- **`persistent`** - veritabanı destekli cookie
+  (`PersistentTokenBasedRememberMeServices`), `persistent_logins` tablosuna
+  yazar. Aşağıdaki Token Inspector, Rotasyon, Çalıntı Cookie Tespiti ve
+  IP-Bound bölümlerinin **hepsi bu modu varsayar** - onları denemeden önce
+  bu property'yi `persistent` yap ve backend'i yeniden başlat.
+
+Geçiş tek satırlık bir konfigürasyon değişikliğidir, kod değişikliği
+gerektirmez (NFR-005) - bkz. [UC-010](docs/use_cases/UC-010-strategy-switching.md).
 
 ## Test
 
@@ -56,13 +105,27 @@ MySQL'in çalışıyor olması gerekir.
 
 ## Görevler
 
-| Görev              | Açıklama                                   |
-| ------------------ | ------------------------------------------- |
-| `task infra:up`    | MySQL container'ını başlatır                |
-| `task infra:down`  | MySQL container'ını durdurur                |
-| `task backend:run` | Spring Boot backend'i çalıştırır            |
-| `task backend:test`| Backend testlerini çalıştırır               |
-| `task frontend:run`| Vite dev server'ı çalıştırır                |
+| Görev                  | Açıklama                                          |
+| ---------------------- | -------------------------------------------------- |
+| `task infra:up`        | MySQL container'ını başlatır                       |
+| `task infra:down`      | MySQL container'ını durdurur                       |
+| `task backend:run`     | Spring Boot backend'i çalıştırır                   |
+| `task backend:test`    | Backend testlerini çalıştırır                      |
+| `task frontend:run`    | Vite dev server'ı çalıştırır                       |
+| `task frontend:build`  | Frontend'i production için derler (`vite build`)   |
+
+## CSRF Koruması
+
+Bu uygulama CSRF korumasını etkin çalıştırır -
+`CookieCsrfTokenRepository.withHttpOnlyFalse()` ile üretilen `XSRF-TOKEN`
+cookie'si JS tarafından okunabilir (bilerek `HttpOnly` değil - bu bir kimlik
+bilgisi değildir, `JSESSIONID`/remember-me cookie'sinin aksine), frontend
+(`api.js`) bu değeri okuyup her mutating (POST/PUT/DELETE) istekte
+`X-XSRF-TOKEN` header'ı olarak geri gönderir. GET istekleri bu header'a
+ihtiyaç duymaz. Backend tarafında `CsrfCookieFilter` (bkz. javadoc'u), saf
+bir JSON API'de bu cookie'nin hiç yazılmayacağı - Spring Security'nin
+CSRF token'ı yalnızca bir view render edildiğinde tetiklenen "deferred"
+(tembel) bir mekanizmayla ürettiği - gerçek gotcha'sını kapatır.
 
 ## Session Kaybını Simüle Etme (UC-004, UC-005)
 
@@ -82,6 +145,17 @@ otomatik girişi gözlemleyebilirsin:
    değildir) - `app.remember-me.key` sabit kaldığı sürece restart sonrası da
    geçerlidir.
 
+**Not (UC-003, logout'un gerçek kapsamı):** logout her zaman tarayıcıdaki
+cookie'leri doğru şekilde temizler, ama sunucu tarafında gerçekten iptal
+edilen bir kayıt yalnızca `persistent` modda vardır - `token` modda (bu
+uygulamanın varsayılanı) silinecek bir sunucu kaydı yoktur, bu yüzden
+logout'tan önce kopyalanmış ham bir cookie değeri, imzası süresi dolana
+kadar hâlâ kriptografik olarak geçerlidir (bkz.
+`RememberMeAndLogoutTests.knownLimitationAReplayedPreLogoutRememberMeCookieValueStillAuthenticates`).
+`persistent` moda geçmek (UC-010) bu boşluğu kalıcı olarak kapatır - bkz.
+`PersistentModeLogoutRevokesTokensTests` ve
+[UC-003](docs/use_cases/UC-003-logout.md)'ün "Step 4'ün Kapsamı" notu.
+
 Süresi dolmuş cookie davranışını (UC-005/BR-007) elle gözlemlemek için
 `applications/backend/src/main/resources/application.properties` içindeki
 `app.remember-me.token-validity-seconds`'ı geçici olarak kısalt (ör. `30`),
@@ -95,13 +169,19 @@ düşmeli. Otomatik test kapsamı için bkz.
 `app.remember-me.strategy=persistent` iken (bkz. UC-010) uygulama içinde bir
 **Token Inspector** sayfası vardır (giriş ekranındaki veya Notlarım
 sayfasındaki "Token Inspector" butonu, kimlik doğrulama gerektirmez -
-`GET /api/token-inspector` bilinçli olarak `permitAll`, çünkü bu tek-kullanıcılı
-demo'da başka kullanıcıdan gizlenecek bir şey yok ve UC-012'nin kendi
-senaryosu tam da hırsızlık isteği reddedilirken Inspector'ın çalışmaya devam
-etmesini bekliyor). Sayfa `persistent_logins` tablosundaki
-kullanıcı adı/series/token/son kullanım kayıtlarını canlı listeler; "Yenile"
-butonu veya sayfa açılışı her seferinde taze bir sorgu çalıştırır (BR-019 -
-önbellek yok).
+`GET /api/token-inspector` bilinçli olarak `permitAll`). Sayfa
+`persistent_logins` tablosundaki kullanıcı adı/series/token/son kullanım
+kayıtlarını canlı listeler; "Yenile" butonu veya sayfa açılışı her seferinde
+taze bir sorgu çalıştırır (BR-019 - önbellek yok).
+
+> **Uyarı:** bu sayfa gerçek, canlı remember-me kimlik bilgilerini (series +
+> token, ki birlikte tam remember-me cookie değerini yeniden üretirler)
+> hiçbir kimlik doğrulama olmadan gösterir. Bu yalnızca UC-012'nin çalıntı
+> cookie senaryosu, bir öğrenenin gerçek bir cookie değerini kopyalamasını
+> gerektirdiği için böyle bırakıldı - **bu desen production'da asla
+> kullanılmamalıdır.** Gerçek bir "admin" görünümü güçlü kimlik doğrulama,
+> yetki sınırlaması gerektirir ve ham token değerlerini asla döndürmez -
+> bkz. `TokenInspectorController`'ın javadoc'u.
 
 **Rotasyon ve çalıntı cookie tespiti bu fazda inşa edilmedi** - Spring
 Security'nin `PersistentTokenBasedRememberMeServices`'i (Faz 6'da zaten

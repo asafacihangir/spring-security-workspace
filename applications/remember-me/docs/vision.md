@@ -165,7 +165,7 @@ Remember-me token'ı, oluşturulduğu istemcinin IP adresine bağlanır: otomati
 
 **Why this priority:** İleri seviye bir özelleştirme alıştırmasıdır (custom remember-me services); temel akışlara bağımlıdır ve onlar olmadan anlamı yoktur.
 
-**Independent Test:** Remember-me ile login olup `JSESSIONID` silindiğinde aynı makineden otomatik login'in çalıştığı; ardından isteğin IP'si değiştirilerek (ör. farklı bir ağ arayüzü/proxy üzerinden veya test isteğinde `X-Forwarded-For` ile) aynı cookie'nin reddedildiği doğrulanarak test edilebilir.
+**Independent Test:** Remember-me ile login olup `JSESSIONID` silindiğinde aynı makineden otomatik login'in çalıştığı; ardından isteğin IP'si değiştirilerek aynı cookie'nin reddedildiği doğrulanarak test edilebilir. Not: gerçekleştirilen uygulama IP kaynağı olarak yalnızca `HttpServletRequest.getRemoteAddr()`'ı okur - `X-Forwarded-For` gibi istemci tarafından iddia edilebilecek bir başlığa kasıtlı olarak güvenmez (bkz. `IpBoundPersistentTokenBasedRememberMeServices`'in javadoc'u). Farklı IP'yi elle simüle etmek için bu başlığı denemek yerine README'nin "Farklı IP Simülasyonu" bölümündeki gerçekten çalışan yöntemi (ör. `localhost` vs `127.0.0.1`, veya `MockHttpServletRequestBuilder.remoteAddress(...)` ile otomatik testler) kullan.
 
 **Acceptance Scenarios:**
 
