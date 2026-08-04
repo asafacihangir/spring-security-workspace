@@ -12,3 +12,15 @@ export async function apiGet(path) {
   })
   return response
 }
+
+// Posts a plain x-www-form-urlencoded body, the shape Spring Security's
+// UsernamePasswordAuthenticationFilter expects from a login submission.
+export async function apiPostForm(path, fields) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields),
+  })
+  return response
+}

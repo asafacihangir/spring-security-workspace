@@ -1,29 +1,44 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiGet } from './api'
+import LoginForm from './LoginForm'
+import ProtectedPage from './ProtectedPage'
 
 function App() {
-  const [result, setResult] = useState(null)
+  const [username, setUsername] = useState(null)
+  const [checkingSession, setCheckingSession] = useState(true)
 
-  async function checkBackendHealth() {
-    setResult('checking...')
-    try {
-      const response = await apiGet('/health')
-      const body = await response.text()
-      setResult(`HTTP ${response.status} - ${body}`)
-    } catch (error) {
-      setResult(`request failed: ${error.message}`)
+  useEffect(() => {
+    let cancelled = false
+    apiGet('/me')
+      .then(async (response) => {
+        if (cancelled) return
+        if (response.ok) {
+          const body = await response.json()
+          setUsername(body.username)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingSession(false)
+      })
+    return () => {
+      cancelled = true
     }
+  }, [])
+
+  async function handleLoginSuccess() {
+    const response = await apiGet('/me')
+    const body = await response.json()
+    setUsername(body.username)
   }
 
-  return (
-    <main>
-      <h1>remember-me lab</h1>
-      <p>Faz 0 iskeleti: backend'e proxy'li basit bir istek at.</p>
-      <button type="button" onClick={checkBackendHealth}>
-        Check backend health
-      </button>
-      {result && <pre>{result}</pre>}
-    </main>
+  if (checkingSession) {
+    return null
+  }
+
+  return username ? (
+    <ProtectedPage username={username} />
+  ) : (
+    <LoginForm onLoginSuccess={handleLoginSuccess} />
   )
 }
 
