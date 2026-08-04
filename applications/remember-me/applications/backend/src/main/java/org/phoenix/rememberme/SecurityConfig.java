@@ -1,6 +1,7 @@
 package org.phoenix.rememberme;
 
 import jakarta.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -41,12 +44,14 @@ import org.springframework.security.web.context.SecurityContextRepository;
  * rather than half-implemented.
  *
  * <p><b>Remember-me (UC-002, FR-002/FR-003):</b> {@code rememberMe()} wires
- * Spring Security's default {@code TokenBasedRememberMeServices} - a
- * signed, stateless cookie, not the database-backed persistent-token
- * variant (that swap is Faz 6's job). Nothing here hardcodes the
- * "token-based" choice beyond this one DSL call, so Faz 6 can later switch
- * to {@code .tokenRepository(...)} (persistent tokens) without touching
- * the login form, the logout config, or the cookie names below.
+ * either Spring Security's default {@code TokenBasedRememberMeServices} - a
+ * signed, stateless cookie - or the database-backed
+ * {@code PersistentTokenBasedRememberMeServices} variant, chosen at startup
+ * by {@code app.remember-me.strategy} (Faz 6, UC-010, BR-013/BR-014,
+ * NFR-005; see {@link RememberMeStrategy} and the {@code rememberMe(...)}
+ * customizer in {@link #filterChain}). Nothing else in this class - the
+ * login form, the logout config, the cookie names below - differs between
+ * the two strategies; the property is the only thing that changes.
  *
  * <p>The remember-me parameter/cookie name stays Spring's default,
  * {@value #REMEMBER_ME_PARAMETER} - Faz 9 is what renames these, not this
@@ -179,10 +184,36 @@ public class SecurityConfig {
         return new ChangeSessionIdAuthenticationStrategy();
     }
 
+    /**
+     * Faz 6 (UC-010, FR-010): Spring Security's own JDBC-backed
+     * {@link PersistentTokenRepository}, pointed at the same
+     * {@link DataSource} {@code users}/{@code notes} already use. Wired
+     * unconditionally - not behind {@code @ConditionalOnProperty} or a
+     * profile - so the {@code persistent_logins} table/repository exist
+     * identically whichever strategy {@link #filterChain} ends up selecting
+     * (BR-013: the switch is a single property read inside one
+     * {@code @Bean} method, not a different set of beans coming into
+     * existence). {@code setCreateTableOnStartup} is deliberately left at
+     * its default {@code false}: {@link PersistentLogin} (an
+     * {@code @Entity}, unconditionally on the classpath) is what gives this
+     * table its schema, via the same
+     * {@code spring.jpa.hibernate.ddl-auto=update} mechanism
+     * {@code users}/{@code notes} already rely on - see that class's
+     * javadoc for the full reasoning.
+     */
+    @Bean
+    PersistentTokenRepository persistentTokenRepository(DataSource dataSource) {
+        JdbcTokenRepositoryImpl repository = new JdbcTokenRepositoryImpl();
+        repository.setDataSource(dataSource);
+        return repository;
+    }
+
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http,
             @Value("${app.remember-me.key}") String rememberMeKey,
             @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds,
+            @Value("${app.remember-me.strategy}") String rememberMeStrategy,
+            PersistentTokenRepository persistentTokenRepository,
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy) throws Exception {
         http
@@ -216,17 +247,33 @@ public class SecurityConfig {
                             response.getWriter().write("{\"error\":\"Kullanıcı adı veya şifre hatalı.\"}");
                         })
                         .permitAll())
-                .rememberMe(remember -> remember
-                        // BR-003: no `alwaysRemember` - a cookie is only ever issued
-                        // when the request actually carries this parameter with a
-                        // truthy value, i.e. the checkbox was checked.
-                        .key(rememberMeKey)
-                        .rememberMeParameter(REMEMBER_ME_PARAMETER)
-                        // Faz 4 (UC-005/BR-007): configurable instead of Spring's
-                        // hardcoded 14-day default, so validity can be turned down
-                        // (e.g. to 30s) to actually observe an expired cookie being
-                        // rejected instead of waiting two weeks for it to happen.
-                        .tokenValiditySeconds(rememberMeTokenValiditySeconds))
+                .rememberMe(remember -> {
+                    remember
+                            // BR-003: no `alwaysRemember` - a cookie is only ever issued
+                            // when the request actually carries this parameter with a
+                            // truthy value, i.e. the checkbox was checked.
+                            .key(rememberMeKey)
+                            .rememberMeParameter(REMEMBER_ME_PARAMETER)
+                            // Faz 4 (UC-005/BR-007): configurable instead of Spring's
+                            // hardcoded 14-day default, so validity can be turned down
+                            // (e.g. to 30s) to actually observe an expired cookie being
+                            // rejected instead of waiting two weeks for it to happen.
+                            .tokenValiditySeconds(rememberMeTokenValiditySeconds);
+                    // Faz 6 (UC-010, BR-013/BR-014): the one branch that decides
+                    // which RememberMeServices Spring Security actually builds -
+                    // see RememberMeConfigurer#createRememberMeServices(): calling
+                    // .tokenRepository(...) is what switches it from the default
+                    // TokenBasedRememberMeServices to
+                    // PersistentTokenBasedRememberMeServices; the TOKEN branch
+                    // below leaves Faz 3's behavior untouched by simply not calling
+                    // it. Every other .rememberMe(...) setting above is shared by
+                    // both strategies - this if/else is the entire difference
+                    // between the two modes, and it is driven purely by the
+                    // app.remember-me.strategy property value read above (BR-013).
+                    if (RememberMeStrategy.from(rememberMeStrategy) == RememberMeStrategy.PERSISTENT) {
+                        remember.tokenRepository(persistentTokenRepository);
+                    }
+                })
                 .logout(logout -> logout
                         .logoutUrl("/api/logout")
                         // JSON API, not a server-rendered app: reply with a bare
