@@ -88,6 +88,95 @@ bekle, `JSESSIONID`'yi sil ve korumalı bir uca istek at - istek login sayfasın
 düşmeli. Otomatik test kapsamı için bkz.
 `RememberMeAutoLoginAndExpiryTests`.
 
+## Token Inspector, Rotasyon ve Çalıntı Cookie Tespiti (UC-011, UC-012, UC-013)
+
+`app.remember-me.strategy=persistent` iken (bkz. UC-010) uygulama içinde bir
+**Token Inspector** sayfası vardır (giriş ekranındaki veya Notlarım
+sayfasındaki "Token Inspector" butonu, kimlik doğrulama gerektirmez -
+`GET /api/token-inspector` bilinçli olarak `permitAll`, çünkü bu tek-kullanıcılı
+demo'da başka kullanıcıdan gizlenecek bir şey yok ve UC-012'nin kendi
+senaryosu tam da hırsızlık isteği reddedilirken Inspector'ın çalışmaya devam
+etmesini bekliyor). Sayfa `persistent_logins` tablosundaki
+kullanıcı adı/series/token/son kullanım kayıtlarını canlı listeler; "Yenile"
+butonu veya sayfa açılışı her seferinde taze bir sorgu çalıştırır (BR-019 -
+önbellek yok).
+
+**Rotasyon ve çalıntı cookie tespiti bu fazda inşa edilmedi** - Spring
+Security'nin `PersistentTokenBasedRememberMeServices`'i (Faz 6'da zaten
+bağlı) bunu kendi başına yapıyor; bu faz sadece Inspector üzerinden
+gözlemlenebilir hale getirdi ve otomatik testlerle doğruladı (bkz.
+`TokenRotationTests`, `StolenCookieDetectionTests`,
+`TokenInspectorPersistentModeTests`).
+
+### Elle Rotasyon Gözlemleme (UC-011)
+
+1. `app.remember-me.strategy=persistent` yap, backend'i yeniden başlat.
+2. "Remember Me" ile giriş yap, Token Inspector'ı aç, series/token değerlerini not et.
+3. `JSESSIONID` cookie'sini sil (DevTools → Application → Cookies), sayfayı
+   **bir kez** yenile.
+4. Token Inspector'ı tekrar aç: series aynı, token değişmiş olmalı (BR-015/016).
+
+> **Dikkat (dev-mode uyarısı):** `main.jsx` React 18 `StrictMode` kullanır;
+> bu, geliştirme modunda component effect'lerini bilinçli olarak iki kez
+> tetikler (React'in kendi "eksik cleanup" tespiti). Sayfa yenilemesi
+> `GET /api/auth-status`'u effect içinden çağırdığından, StrictMode bazen bu
+> isteği neredeyse eş zamanlı olarak iki kez yollar - ikisi de tarayıcının
+> o anki (henüz rotasyona uğramamış) tek kullanımlık remember-me cookie
+> değerini taşır. İlk istek başarıyla auto-login yapıp token'ı döndürür;
+> ikinci istek artık bayatlamış aynı token'ı sunar ve
+> `PersistentTokenBasedRememberMeServices` bunu - haklı olarak, kendi
+> kurallarına göre - hırsızlık sanıp **kaydı siler**. Bu, uygulamanın bir
+> hatası değil, Barry Jaspan'in persistent-cookie algoritmasının doğal bir
+> sonucu: aynı tek-kullanımlık cookie değerini taşıyan iki eşzamanlı istek,
+> algoritma açısından "gerçek istemci + saldırgan" ile ayırt edilemez.
+> Elle denerken bunu görürsen şaşırma - sayfayı tekrar yenilemek (StrictMode
+> yarışı bu kez oluşmazsa) veya production build (`npm run build` + `npm run preview`,
+> StrictMode'un devre dışı olduğu) ile tekrar denemek yeterli. Otomatik
+> testler (`TokenRotationTests`) bu yarış durumuna hiç girmez, çünkü tek bir
+> istek gönderirler.
+
+### Elle Çalıntı Cookie Simülasyonu (UC-012)
+
+Gerçek bir hırsızlığı simüle etmek için remember-me cookie değerinin bir
+kopyasını çıkarıp, meşru tarayıcı onu rotasyona uğrattıktan **sonra**
+tekrar oynatman (replay) yeterli:
+
+1. **Cookie değerini kopyala** (DevTools → Application → Cookies →
+   `remember-me` satırının `Value` sütunu, ya da
+   `document.cookie` HttpOnly olduğu için DevTools dışından okunamaz - sadece
+   Application panelinden kopyalanabilir).
+2. Meşru tarayıcıda `JSESSIONID`'yi sil ve **bir kez** bir korumalı uca istek
+   at (auto-login) - bu, kopyaladığın değeri bayatlatır (token rotasyona
+   uğrar, series aynı kalır).
+3. Kopyaladığın (artık bayat) değeri `curl` ile geri oynat:
+
+   ```bash
+   curl -i -b "remember-me=<kopyaladığın-değer>" http://localhost:8080/api/me
+   ```
+
+   Yanıt `401` olmalı ve `Set-Cookie: remember-me=; Max-Age=0` ile cookie
+   iptal edilmeli (BR-017).
+4. Token Inspector'ı yenile: az önceki series'e ait kayıt tamamen silinmiş
+   olmalı (BR-018).
+5. Meşru tarayıcıda da `JSESSIONID`'yi sil ve sayfayı yenile: artık
+   otomatik giriş yapamaz, login sayfasına düşer - series tümüyle iptal
+   edildiği için meşru cookie de artık geçersiz.
+
+**Önemli bulgu (BR-018'in tam kapsamı):** Spring Security'nin
+`PersistentTokenBasedRememberMeServices.processAutoLoginCookie`'si, bir
+token uyuşmazlığında `tokenRepository.removeUserTokens(username)` çağırır -
+bu da (`JdbcTokenRepositoryImpl` üzerinden)
+`delete from persistent_logins where username = ?` çalıştırır: silme
+**kullanıcı** bazında, series bazında değil. BR-018'in Türkçe metni ("o
+series'e bağlı tüm hatırlanma kayıtları") tek bir series'i işaret ediyor
+gibi okunabilir, ama gerçek davranış daha geniş: kullanıcının **her
+cihazdaki** tüm series'leri, hangisi çalınmış olursa olsun, tek seferde
+iptal edilir. Bu lab'ın tek-cihazlı elle-yürütme senaryosunda (Test Adımı
+1-4) iki davranış birbirinden ayırt edilemez (zaten tek bir series var),
+ama gerçek kapsamı bilmek önemli - bkz. `StolenCookieDetectionTests`
+(özellikle `findingSpringDeletesEveryDeviceSeriesForTheUserNotJustTheStolenOne`
+testi, iki cihazı simüle edip bunu doğrudan kanıtlıyor).
+
 ## Dokümantasyon
 
 - [vision.md](docs/vision.md) — ürün vizyonu

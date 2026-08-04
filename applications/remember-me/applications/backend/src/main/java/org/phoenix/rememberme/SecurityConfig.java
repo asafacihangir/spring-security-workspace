@@ -223,7 +223,12 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/health", "/api/logout", "/api/auth-status").permitAll()
+                        // Faz 7 (UC-013): /api/token-inspector joins /api/auth-status here -
+                        // see TokenInspectorController's javadoc "Access control" section for
+                        // why a debugging/teaching endpoint over a single-demo-user table has
+                        // no per-caller boundary to enforce.
+                        .requestMatchers("/api/health", "/api/logout", "/api/auth-status", "/api/token-inspector")
+                        .permitAll()
                         // BR-010/BR-011: isFullyAuthenticated(), not just authenticated() -
                         // a RememberMeAuthenticationToken satisfies the latter but must not
                         // satisfy the former. See class javadoc.

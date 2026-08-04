@@ -5,6 +5,7 @@ import NotesPage from './NotesPage'
 import AuthIndicator from './AuthIndicator'
 import AccountSettingsPage from './AccountSettingsPage'
 import ReauthPage from './ReauthPage'
+import TokenInspectorPage from './TokenInspectorPage'
 
 // UC-007/008/009 (Faz 5): `authLevel` is this app's single piece of state
 // for the Anonymous/Remembered/Fully Authenticated indicator (BR-009),
@@ -82,20 +83,44 @@ function App() {
     setView('account')
   }
 
+  // UC-013 (Faz 7): reachable whether or not a username is known - GET
+  // /api/token-inspector is permitAll (see TokenInspectorController's
+  // javadoc), so this view is available from the login screen too, not just
+  // once already logged in.
+  function openTokenInspector() {
+    setView('token-inspector')
+  }
+
   if (checkingSession) {
     return null
   }
 
   let content
-  if (!username) {
-    content = <LoginForm onLoginSuccess={handleLoginSuccess} />
+  if (view === 'token-inspector') {
+    content = <TokenInspectorPage onBack={() => setView('notes')} />
+  } else if (!username) {
+    content = (
+      <>
+        <LoginForm onLoginSuccess={handleLoginSuccess} />
+        <p>
+          <button type="button" onClick={openTokenInspector}>
+            Token Inspector
+          </button>
+        </p>
+      </>
+    )
   } else if (view === 'account') {
     content = <AccountSettingsPage onNeedsReauth={needsReauth} onBack={() => setView('notes')} />
   } else if (view === 'reauth') {
     content = <ReauthPage onSuccess={handleReauthSuccess} onCancel={() => setView('notes')} />
   } else {
     content = (
-      <NotesPage username={username} onLogout={handleLogout} onOpenAccountSettings={openAccountSettings} />
+      <NotesPage
+        username={username}
+        onLogout={handleLogout}
+        onOpenAccountSettings={openAccountSettings}
+        onOpenTokenInspector={openTokenInspector}
+      />
     )
   }
 

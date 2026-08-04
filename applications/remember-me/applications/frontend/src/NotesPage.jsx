@@ -13,7 +13,7 @@ import { apiDelete, apiGet, apiPostJson, apiPutJson } from './api'
 // A3 (empty title): the backend is the actual enforcement point
 // (NoteController.validate). The check below is a client-side convenience
 // for instant feedback, not something this code relies on for correctness.
-function NotesPage({ username, onLogout, onOpenAccountSettings }) {
+function NotesPage({ username, onLogout, onOpenAccountSettings, onOpenTokenInspector }) {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState(null)
@@ -115,6 +115,9 @@ function NotesPage({ username, onLogout, onOpenAccountSettings }) {
         Hoş geldin, {username}.{' '}
         <button type="button" onClick={onOpenAccountSettings}>
           Hesap Ayarları
+        </button>{' '}
+        <button type="button" onClick={onOpenTokenInspector}>
+          Token Inspector
         </button>{' '}
         <button type="button" onClick={onLogout}>
           Çıkış Yap
