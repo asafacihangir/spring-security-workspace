@@ -62,6 +62,11 @@ function TokenInspectorPage({ onBack }) {
         </button>
       </p>
 
+      <p role="alert" style={{ border: '2px solid #b00', padding: '0.5rem', background: '#fff3f3' }}>
+        ⚠️ Bu sayfa öğrenim amaçlı kimlik doğrulama olmadan gerçek oturum
+        token'larını gösterir — production'da asla böyle bir uç açılmaz.
+      </p>
+
       {loading && <p>Yükleniyor...</p>}
       {error && <p role="alert">{error}</p>}
 

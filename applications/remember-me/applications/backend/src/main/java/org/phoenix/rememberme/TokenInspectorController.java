@@ -25,17 +25,43 @@ import org.springframework.web.bind.annotation.RestController;
  * "yenileme sonrasi en gec 2 sn icinde guncel durumu gosterir" holds
  * trivially; there is nothing here that could go stale between two calls.
  *
- * <p><b>Access control:</b> {@code permitAll} (see
- * {@link SecurityConfig#filterChain}), the same reasoning as
- * {@link AuthStatusController}. This is a single-demo-user teaching/
- * debugging tool with no per-caller filtering - it dumps the whole table,
- * not "the caller's own records" - so there is no confidentiality boundary
- * an auth check would actually enforce here. Requiring
- * {@code isFullyAuthenticated()} (the way {@code /api/account} does) would
- * also actively break UC-012's own walkthrough: Test Adimi 3 expects the
- * Inspector, opened in a separate tab, to keep reflecting state immediately
- * after a theft wipes the caller's own persistent login, without forcing a
- * fresh password login first just to look at what happened.
+ * <p><b>Access control - read this before copying this pattern anywhere
+ * else:</b> {@code permitAll} (see {@link SecurityConfig#filterChain}), the
+ * same reasoning as {@link AuthStatusController}. This endpoint returns live
+ * bearer credentials with zero authentication: {@code series} and
+ * {@code token} together are not a description of the remember-me cookie,
+ * they ARE it - {@code base64(series:token)} reconstructs the exact cookie
+ * value {@code IpBoundPersistentTokenBasedRememberMeServices}/
+ * {@code PersistentTokenBasedRememberMeServices} would accept as a valid
+ * auto-login credential. Anyone who can load this page can copy that value
+ * and authenticate as the demo user, no password required.
+ *
+ * <p>That is intentional here for exactly one reason: UC-012's stolen-cookie
+ * walkthrough requires a learner to literally copy a live remember-me cookie
+ * value out of a running app and replay it, and there is no way to do that
+ * without a screen that shows the real, unmasked value. This is a pedagogical
+ * trade-off for a single-learner local demo, not a general access-control
+ * argument - earlier drafts of this javadoc justified the open endpoint as
+ * "no confidentiality boundary because there's only one user," which
+ * conflates tenancy (how many users the schema supports) with secrecy (what
+ * an unauthenticated caller can extract); a single-tenant app can still have
+ * secrets, and a live auth token is one. The actual justification is
+ * narrower and less comfortable: pedagogy demanded it, so it was allowed, with
+ * this warning attached.
+ *
+ * <p><b>No production system may expose an endpoint like this.</b> A real
+ * "admin view" of session/token state would need strong authentication,
+ * audience/role-scoping (an ordinary user must never see another user's - or
+ * even their own live - token secrets), and would return session metadata
+ * (username, series, last-used, IP) without ever putting the raw
+ * {@code token} value in a response body. Requiring
+ * {@code isFullyAuthenticated()} here (the way {@code /api/account} does)
+ * would also still break UC-012's own walkthrough even if it were otherwise
+ * desirable: Test Adimi 3 expects the Inspector, opened in a separate tab,
+ * to keep reflecting state immediately after a theft wipes the caller's own
+ * persistent login, without forcing a fresh password login first just to
+ * look at what happened - which is one more reason this stays a deliberately
+ * lab-only pattern, not a template.
  *
  * <p><b>A1/A2:</b> distinguishing "persistent mode, no rows yet" (A1) from
  * "token mode, so there is nothing to have" (A2) needs to know which
