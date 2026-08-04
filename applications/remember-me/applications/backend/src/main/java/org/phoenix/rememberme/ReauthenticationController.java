@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,7 +39,10 @@ import org.springframework.web.bind.annotation.RestController;
  * tricky part of this phase): on a correct password, this does not create a
  * new login or a new session through Spring Security's normal
  * authentication machinery (e.g. re-running {@code AuthenticationManager}
- * via a simulated form submit). Instead it:
+ * via a simulated form submit). Instead it replicates, by hand, exactly what
+ * {@code AbstractAuthenticationProcessingFilter.successfulAuthentication(...)}
+ * does (that is what form login runs through) between deciding "this
+ * credential check succeeded" and replying to the caller:
  * <ol>
  * <li>builds a fresh {@code UsernamePasswordAuthenticationToken} via the
  * 3-arg constructor (principal, credentials, authorities) - that specific
@@ -47,11 +51,14 @@ import org.springframework.web.bind.annotation.RestController;
  * <li>installs it into a new {@link SecurityContext} via
  * {@code SecurityContextHolder.setContext(...)}, replacing whatever
  * {@code RememberMeAuthenticationToken} was there;
+ * <li>calls {@link SessionAuthenticationStrategy#onAuthentication} on the
+ * SAME strategy bean {@code SecurityConfig} wires into the filter chain's
+ * {@code sessionManagement()} DSL - see below for why;
  * <li>explicitly calls {@link SecurityContextRepository#saveContext} on the
  * SAME repository bean {@code SecurityConfig} wires into the filter chain's
  * {@code securityContext()} DSL.
  * </ol>
- * That explicit save in step 3 is required because Spring Security 6's
+ * That explicit save in step 4 is required because Spring Security 6's
  * {@code SecurityContextHolderFilter} only *loads* the context from the
  * repository at the start of a request - unlike the older, deprecated
  * {@code SecurityContextPersistenceFilter}, it does not auto-save whatever
@@ -67,6 +74,22 @@ import org.springframework.web.bind.annotation.RestController;
  * session was already lost); either way, this is the SAME
  * {@code SecurityContext} object for the request/session Spring Security
  * already associated with this caller, not a parallel, second identity.
+ *
+ * <p>Step 3's session-id rotation is separately required to prevent session
+ * fixation (CWE-384): without it, if a caller reaches this endpoint with an
+ * ALREADY-LIVE {@code JSESSIONID} (not the typical Remembered case, which
+ * has none, but a real possibility - e.g. a caller who still has a session
+ * from before their remember-me cookie took over), that same session id
+ * would carry across the privilege boundary unchanged. An attacker who
+ * planted that id on the victim beforehand (classic fixation setup) would
+ * then inherit the resulting fully-authenticated session. Calling the same
+ * {@code SessionAuthenticationStrategy} the filter chain itself uses -
+ * {@code ChangeSessionIdAuthenticationStrategy} by default, see
+ * {@code SecurityConfig#sessionAuthenticationStrategy()} - rotates the id
+ * via {@code HttpServletRequest#changeSessionId()} whenever a session
+ * already exists, and is a documented no-op when it doesn't (nothing to
+ * rotate away from yet), which the {@code saveContext} call immediately
+ * afterward then turns into a brand-new, previously-unknown id anyway.
  */
 @RestController
 public class ReauthenticationController {
@@ -75,13 +98,16 @@ public class ReauthenticationController {
     private final UserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder;
     private final SecurityContextRepository securityContextRepository;
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 
     public ReauthenticationController(UserRepository userRepository, UserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder, SecurityContextRepository securityContextRepository) {
+            PasswordEncoder passwordEncoder, SecurityContextRepository securityContextRepository,
+            SessionAuthenticationStrategy sessionAuthenticationStrategy) {
         this.userRepository = userRepository;
         this.userDetailsService = userDetailsService;
         this.passwordEncoder = passwordEncoder;
         this.securityContextRepository = securityContextRepository;
+        this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
     }
 
     @PostMapping("/api/reauthenticate")
@@ -108,6 +134,10 @@ public class ReauthenticationController {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(upgraded);
         SecurityContextHolder.setContext(context);
+        // CWE-384: rotate the session id across this privilege change before
+        // persisting, exactly where AbstractAuthenticationProcessingFilter
+        // calls the same strategy for a real form login - see class javadoc.
+        sessionAuthenticationStrategy.onAuthentication(upgraded, httpRequest, httpResponse);
         securityContextRepository.saveContext(context, httpRequest, httpResponse);
 
         return ResponseEntity.ok(Map.of("level", AuthLevel.FULLY_AUTHENTICATED.name()));

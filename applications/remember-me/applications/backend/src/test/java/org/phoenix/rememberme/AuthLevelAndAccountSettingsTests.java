@@ -34,7 +34,10 @@ import org.springframework.test.web.servlet.MvcResult;
  * <li>{@code /api/reauthenticate} upgrades a Remembered session to Fully
  * Authenticated on the correct password, and leaves it exactly as
  * Remembered on the wrong one (UC-009 main scenario + A1), always checking
- * the CURRENTLY authenticated principal's own password (BR-012).
+ * the CURRENTLY authenticated principal's own password (BR-012);
+ * <li>that same upgrade rotates an already-live session id (CWE-384
+ * session-fixation protection, fix-round addition) rather than carrying a
+ * pre-existing id across the privilege boundary unchanged.
  * </ul>
  *
  * <p>Runs against the real MySQL instance (task infra:up), same as the
@@ -169,6 +172,50 @@ class AuthLevelAndAccountSettingsTests {
                 .andExpect(jsonPath("$.level").value("REMEMBERED"));
         mockMvc.perform(get("/api/account").cookie(rememberMe))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void reauthenticationRotatesAnAlreadyLiveSessionIdToPreventFixation() throws Exception {
+        // CWE-384 (fix-round finding): a caller reaching /api/reauthenticate
+        // with an ALREADY-LIVE session - not the typical cookie-only
+        // Remembered case, but a real possibility (see
+        // ReauthenticationController's javadoc) - must not carry that same
+        // session id across the privilege boundary. If an attacker planted
+        // that id on the victim beforehand (classic fixation setup), an
+        // unrotated id would hand the attacker the resulting
+        // fully-authenticated session. This pins down that
+        // SessionAuthenticationStrategy.onAuthentication(...) actually runs
+        // and actually changes the id, not just that the code compiles.
+        MvcResult loginResult = login(true);
+        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        assertThat(rememberMe).isNotNull();
+
+        // A pre-existing session for this caller - e.g. left over from
+        // browsing before the remember-me cookie took over - carrying no
+        // SecurityContext of its own (RememberMeAuthenticationFilter still
+        // establishes REMEMBERED off the cookie regardless of this session
+        // existing).
+        MockHttpSession preExistingSession = new MockHttpSession();
+        String originalSessionId = preExistingSession.getId();
+
+        MvcResult reauthResult = mockMvc.perform(post("/api/reauthenticate")
+                        .session(preExistingSession)
+                        .cookie(rememberMe)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"" + DemoUserSeeder.DEMO_PASSWORD + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.level").value("FULLY_AUTHENTICATED"))
+                .andReturn();
+
+        MockHttpSession resultingSession = (MockHttpSession) reauthResult.getRequest().getSession(false);
+        assertThat(resultingSession).isNotNull();
+        assertThat(resultingSession.getId()).isNotEqualTo(originalSessionId);
+
+        // And the rotated session is genuinely the one now carrying the
+        // upgraded level - not a side effect that happens to change an id
+        // nobody ends up using.
+        mockMvc.perform(get("/api/auth-status").session(resultingSession))
+                .andExpect(jsonPath("$.level").value("FULLY_AUTHENTICATED"));
     }
 
     @Test

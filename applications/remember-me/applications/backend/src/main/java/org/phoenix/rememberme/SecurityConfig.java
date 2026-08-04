@@ -15,6 +15,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
@@ -93,11 +95,14 @@ import org.springframework.security.web.context.SecurityContextRepository;
  * {@link AuthLevel} for the same trust-resolver logic reused for the
  * indicator itself.
  * </ul>
- * The {@link #securityContextRepository()} bean below is shared between
- * this filter chain and {@link ReauthenticationController}, which needs the
- * exact same repository instance to explicitly persist an upgraded
- * {@code Authentication} back into the caller's session (see that class's
- * javadoc for why the save has to be explicit in Spring Security 6).
+ * The {@link #securityContextRepository()} and
+ * {@link #sessionAuthenticationStrategy()} beans below are both shared with
+ * {@link ReauthenticationController}, which needs the exact same instances
+ * to explicitly persist an upgraded {@code Authentication} back into the
+ * caller's session and to rotate the session id across that privilege
+ * change (see that class's javadoc for why both calls have to be explicit
+ * in Spring Security 6 when the upgrade isn't done through a
+ * {@code AbstractAuthenticationProcessingFilter} subclass).
  */
 @Configuration
 public class SecurityConfig {
@@ -146,15 +151,46 @@ public class SecurityConfig {
         return new HttpSessionSecurityContextRepository();
     }
 
+    /**
+     * Faz 5 fix-round: session-fixation protection (CWE-384) for
+     * {@link ReauthenticationController}'s privilege upgrade. Spring
+     * Security's own {@code AbstractAuthenticationProcessingFilter} (what
+     * runs form login) always calls
+     * {@code sessionAuthenticationStrategy.onAuthentication(...)} between
+     * installing the new {@code Authentication} into the
+     * {@code SecurityContext} and persisting it - that call is what rotates
+     * the session id whenever the privilege level changes, so a session id
+     * an attacker planted before the victim authenticated (classic fixation
+     * setup) is never the same id the victim ends up fully authenticated
+     * under. The controller-driven upgrade path bypasses that filter
+     * entirely, so it has to invoke the exact same strategy itself -
+     * exposed as a bean here (mirroring {@link #securityContextRepository()}
+     * above) so both this filter chain and the controller share one
+     * instance rather than each configuring their own.
+     * {@code ChangeSessionIdAuthenticationStrategy} is Spring Security's own
+     * default for this slot (Servlet 3.1+ {@code HttpServletRequest#changeSessionId()},
+     * no new session/cookie round-trip the way session-invalidation-based
+     * strategies would need) and is a no-op when the caller has no session
+     * yet - exactly the common Remembered-caller case, where there is no
+     * pre-existing id to rotate away from.
+     */
+    @Bean
+    SessionAuthenticationStrategy sessionAuthenticationStrategy() {
+        return new ChangeSessionIdAuthenticationStrategy();
+    }
+
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http,
             @Value("${app.remember-me.key}") String rememberMeKey,
             @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds,
-            SecurityContextRepository securityContextRepository) throws Exception {
+            SecurityContextRepository securityContextRepository,
+            SessionAuthenticationStrategy sessionAuthenticationStrategy) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .securityContext(securityContext -> securityContext
                         .securityContextRepository(securityContextRepository))
+                .sessionManagement(session -> session
+                        .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/logout", "/api/auth-status").permitAll()
                         // BR-010/BR-011: isFullyAuthenticated(), not just authenticated() -
