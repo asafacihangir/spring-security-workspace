@@ -45,12 +45,12 @@ class RememberMeTokenValiditySecondsIsConfigurableTests {
         MvcResult loginResult = mockMvc.perform(post("/api/login")
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
-                        .param("remember-me", "true"))
+                        .param("keep-me", "true"))
                 .andExpect(status().isOk())
                 .andReturn();
 
         long afterLogin = System.currentTimeMillis();
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         long expiryTime = decodeExpiryTimeMillis(rememberMe.getValue());

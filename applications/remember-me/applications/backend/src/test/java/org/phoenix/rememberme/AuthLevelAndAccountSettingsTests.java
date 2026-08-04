@@ -56,7 +56,7 @@ class AuthLevelAndAccountSettingsTests {
                 .param("username", DemoUserSeeder.DEMO_USERNAME)
                 .param("password", DemoUserSeeder.DEMO_PASSWORD);
         if (rememberMe) {
-            request.param("remember-me", "true");
+            request.param("keep-me", "true");
         }
         return mockMvc.perform(request)
                 .andExpect(status().isOk())
@@ -86,7 +86,7 @@ class AuthLevelAndAccountSettingsTests {
         // UC-007 main scenario step 6 / Test Adimi 2 (session gone, only the
         // remember-me cookie authenticates).
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(get("/api/auth-status").cookie(rememberMe))
@@ -100,7 +100,7 @@ class AuthLevelAndAccountSettingsTests {
         // enforcement itself (isFullyAuthenticated() in SecurityConfig), not
         // a check that only the frontend route guard would catch.
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(get("/api/account").cookie(rememberMe))
@@ -128,7 +128,7 @@ class AuthLevelAndAccountSettingsTests {
         // UC-009 main scenario, and Test Adimi 5 second half: rejected
         // before re-auth, 200 after, for the same underlying flow.
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(get("/api/account").cookie(rememberMe))
@@ -157,7 +157,7 @@ class AuthLevelAndAccountSettingsTests {
     @Test
     void a1WrongPasswordLeavesTheLevelAsRememberedAndAccountSettingsStillBlocked() throws Exception {
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(post("/api/reauthenticate")
@@ -187,7 +187,7 @@ class AuthLevelAndAccountSettingsTests {
         // SessionAuthenticationStrategy.onAuthentication(...) actually runs
         // and actually changes the id, not just that the code compiles.
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         // A pre-existing session for this caller - e.g. left over from
@@ -228,7 +228,7 @@ class AuthLevelAndAccountSettingsTests {
         // unknown properties by default), and the check still succeeds
         // against the demo account's own password.
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(post("/api/reauthenticate")

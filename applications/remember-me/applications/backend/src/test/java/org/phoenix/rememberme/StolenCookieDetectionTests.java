@@ -98,21 +98,25 @@ class StolenCookieDetectionTests {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("username", DemoUserSeeder.DEMO_USERNAME);
         form.add("password", DemoUserSeeder.DEMO_PASSWORD);
-        form.add("remember-me", "true");
+        // Faz 9 (UC-015): "keep-me" is this app's configured parameter name
+        // (app.remember-me.parameter-name), not Spring's default.
+        form.add("keep-me", "true");
 
         ResponseEntity<String> response = restTemplate.postForEntity("/api/login", new HttpEntity<>(form, headers),
                 String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         String cookieValue = extractRememberMeCookieValue(response);
-        assertThat(cookieValue).as("login with remember-me=true must set a remember-me cookie").isNotNull();
+        assertThat(cookieValue).as("login with keep-me=true must set a notes-rm cookie").isNotNull();
         return cookieValue;
     }
 
     /** Cookie-only request - no session - the same auto-login trigger UC-011/012 describe. */
     private ResponseEntity<String> requestMeWithRememberMeCookie(String cookieValue) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, "remember-me=" + cookieValue);
+        // Faz 9 (UC-015): "notes-rm" is this app's configured cookie name
+        // (app.remember-me.cookie-name), not Spring's default.
+        headers.add(HttpHeaders.COOKIE, "notes-rm=" + cookieValue);
         return restTemplate.exchange("/api/me", HttpMethod.GET, new HttpEntity<>(headers), String.class);
     }
 
@@ -122,9 +126,9 @@ class StolenCookieDetectionTests {
             return null;
         }
         for (String header : setCookieHeaders) {
-            if (header.startsWith("remember-me=")) {
+            if (header.startsWith("notes-rm=")) {
                 String pair = header.split(";", 2)[0];
-                return pair.substring("remember-me=".length());
+                return pair.substring("notes-rm=".length());
             }
         }
         return null;

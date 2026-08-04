@@ -55,12 +55,18 @@ import org.springframework.security.web.context.SecurityContextRepository;
  * login form, the logout config, the cookie names below - differs between
  * the two strategies; the property is the only thing that changes.
  *
- * <p>The remember-me parameter/cookie name stays Spring's default,
- * {@value #REMEMBER_ME_PARAMETER} - Faz 9 is what renames these, not this
- * phase. {@code TokenBasedRememberMeServices} hardcodes
- * {@code Cookie.setHttpOnly(true)} on the cookie it issues (verified
- * against the library bytecode, not assumed), so BR-004/NFR-001 holds
- * without any extra configuration here.
+ * <p><b>Custom names (Faz 9, UC-015, BR-022):</b> the remember-me request
+ * parameter name and cookie name are no longer the hardcoded Spring default -
+ * both are resolved once by the {@link #rememberMeNames} bean from
+ * {@code app.remember-me.parameter-name}/{@code app.remember-me.cookie-name}
+ * (this app's chosen values, {@code keep-me}/{@code notes-rm}), with a
+ * graceful fallback to Spring's own default when either property is absent
+ * or blank (UC-015 A1). See {@link RememberMeNames}'s javadoc for why this
+ * is one bean rather than two independently-read properties, and for how
+ * the frontend learns the parameter name without hardcoding it.
+ * {@code TokenBasedRememberMeServices} hardcodes {@code Cookie.setHttpOnly(true)}
+ * on the cookie it issues (verified against the library bytecode, not
+ * assumed), so BR-004/NFR-001 holds without any extra configuration here.
  *
  * <p><b>Auto-login and expiry (Faz 4, UC-004/UC-005):</b> Spring Security's
  * remember-me filter already performs auto-login on session loss the moment
@@ -115,14 +121,20 @@ import org.springframework.security.web.context.SecurityContextRepository;
 public class SecurityConfig {
 
     /**
-     * Spring Security's default remember-me request parameter name, which
-     * doubles as the cookie name issued by {@code TokenBasedRememberMeServices}
-     * when no explicit cookie name is set. Named as a constant (rather than
-     * left as an implicit default) so the login form, the security config,
-     * and the logout cookie-clearing list can't silently drift apart -
-     * Faz 9 is expected to replace this constant, not scatter the literal.
+     * Faz 9 (UC-015, BR-022): the one bean that resolves both remember-me
+     * names from configuration - see {@link RememberMeNames}'s javadoc for
+     * why this indirection exists instead of reading the two properties
+     * directly wherever they're needed. The {@code :} defaults below (empty
+     * string) intentionally let {@link RememberMeNames#from} see "absent"
+     * as blank rather than as a missing-property exception, so A1 degrades
+     * gracefully instead of failing application startup.
      */
-    static final String REMEMBER_ME_PARAMETER = "remember-me";
+    @Bean
+    RememberMeNames rememberMeNames(
+            @Value("${app.remember-me.parameter-name:}") String parameterNameProperty,
+            @Value("${app.remember-me.cookie-name:}") String cookieNameProperty) {
+        return RememberMeNames.from(parameterNameProperty, cookieNameProperty);
+    }
 
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -215,6 +227,7 @@ public class SecurityConfig {
             @Value("${app.remember-me.key}") String rememberMeKey,
             @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds,
             @Value("${app.remember-me.strategy}") String rememberMeStrategy,
+            RememberMeNames rememberMeNames,
             PersistentTokenRepository persistentTokenRepository,
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy) throws Exception {
@@ -265,7 +278,11 @@ public class SecurityConfig {
                             // when the request actually carries this parameter with a
                             // truthy value, i.e. the checkbox was checked.
                             .key(rememberMeKey)
-                            .rememberMeParameter(REMEMBER_ME_PARAMETER)
+                            // Faz 9 (UC-015, BR-022): both names come from the one
+                            // RememberMeNames bean - see its javadoc and this class's
+                            // javadoc "Custom names" section.
+                            .rememberMeParameter(rememberMeNames.parameterName())
+                            .rememberMeCookieName(rememberMeNames.cookieName())
                             // Faz 4 (UC-005/BR-007): configurable instead of Spring's
                             // hardcoded 14-day default, so validity can be turned down
                             // (e.g. to 30s) to actually observe an expired cookie being
@@ -292,7 +309,11 @@ public class SecurityConfig {
                         // status like the login handlers above do, and let the SPA
                         // decide what "back to the login page" means client-side.
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler())
-                        .deleteCookies("JSESSIONID", REMEMBER_ME_PARAMETER)
+                        // Faz 9 regression check: this must delete the actual COOKIE
+                        // name (rememberMeNames.cookieName(), "notes-rm"), not the
+                        // parameter name - the two are independently configured now
+                        // and are no longer guaranteed to be the same string.
+                        .deleteCookies("JSESSIONID", rememberMeNames.cookieName())
                         .invalidateHttpSession(true)
                         .clearAuthentication(true))
                 .exceptionHandling(ex -> ex

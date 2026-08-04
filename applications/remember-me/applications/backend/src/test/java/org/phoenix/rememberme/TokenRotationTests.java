@@ -55,10 +55,10 @@ class TokenRotationTests {
         MvcResult result = mockMvc.perform(post("/api/login")
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
-                        .param("remember-me", "true"))
+                        .param("keep-me", "true"))
                 .andExpect(status().isOk())
                 .andReturn();
-        Cookie cookie = result.getResponse().getCookie("remember-me");
+        Cookie cookie = result.getResponse().getCookie("notes-rm");
         assertThat(cookie).isNotNull();
         return cookie;
     }
@@ -77,7 +77,7 @@ class TokenRotationTests {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        Cookie rotatedCookie = autoLoginResult.getResponse().getCookie("remember-me");
+        Cookie rotatedCookie = autoLoginResult.getResponse().getCookie("notes-rm");
         assertThat(rotatedCookie).as("auto-login must reissue the remember-me cookie with a new token")
                 .isNotNull();
         String[] rotated = PersistentCookieCodec.seriesAndToken(rotatedCookie);

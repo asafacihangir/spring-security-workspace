@@ -70,9 +70,11 @@ MySQL'in çalışıyor olması gerekir.
 otomatik girişi gözlemleyebilirsin:
 
 1. **`JSESSIONID` cookie'sini silmek:** Tarayıcı DevTools → Application/Storage
-   → Cookies → `JSESSIONID` satırını sil, sayfayı yenile. `remember-me`
+   → Cookies → `JSESSIONID` satırını sil, sayfayı yenile. `notes-rm`
    cookie'si duruyorsa istek yine de kabul edilir (yeni bir session açılır) -
-   yeniden login istenmez.
+   yeniden login istenmez. (Faz 9'dan önce bu cookie'nin adı Spring'in
+   varsayılanı olan `remember-me` idi - bkz. "Özel Cookie ve Parametre
+   İsimleri" bölümü.)
 2. **Backend'i yeniden başlatmak:** Session'lar bellekte tutulduğu için
    `task backend:run`'ı durdurup tekrar başlatmak tüm session'ları siler.
    Remember-me cookie'si bundan etkilenmez, çünkü stateless bir HMAC token'dır
@@ -142,7 +144,7 @@ kopyasını çıkarıp, meşru tarayıcı onu rotasyona uğrattıktan **sonra**
 tekrar oynatman (replay) yeterli:
 
 1. **Cookie değerini kopyala** (DevTools → Application → Cookies →
-   `remember-me` satırının `Value` sütunu, ya da
+   `notes-rm` satırının `Value` sütunu, ya da
    `document.cookie` HttpOnly olduğu için DevTools dışından okunamaz - sadece
    Application panelinden kopyalanabilir).
 2. Meşru tarayıcıda `JSESSIONID`'yi sil ve **bir kez** bir korumalı uca istek
@@ -151,10 +153,10 @@ tekrar oynatman (replay) yeterli:
 3. Kopyaladığın (artık bayat) değeri `curl` ile geri oynat:
 
    ```bash
-   curl -i -b "remember-me=<kopyaladığın-değer>" http://localhost:8080/api/me
+   curl -i -b "notes-rm=<kopyaladığın-değer>" http://localhost:8080/api/me
    ```
 
-   Yanıt `401` olmalı ve `Set-Cookie: remember-me=; Max-Age=0` ile cookie
+   Yanıt `401` olmalı ve `Set-Cookie: notes-rm=; Max-Age=0` ile cookie
    iptal edilmeli (BR-017).
 4. Token Inspector'ı yenile: az önceki series'e ait kayıt tamamen silinmiş
    olmalı (BR-018).
@@ -176,6 +178,43 @@ iptal edilir. Bu lab'ın tek-cihazlı elle-yürütme senaryosunda (Test Adımı
 ama gerçek kapsamı bilmek önemli - bkz. `StolenCookieDetectionTests`
 (özellikle `findingSpringDeletesEveryDeviceSeriesForTheUserNotJustTheStolenOne`
 testi, iki cihazı simüle edip bunu doğrudan kanıtlıyor).
+
+## Özel Cookie ve Parametre İsimleri (UC-015)
+
+Bu uygulama remember-me cookie'sini ve login formundaki "Beni hatırla"
+parametresini Spring Security'nin ortak varsayılanı olan `remember-me`
+yerine kendi özel isimleriyle çalıştırır:
+
+- Cookie adı: `notes-rm` (`app.remember-me.cookie-name`)
+- Parametre adı: `keep-me` (`app.remember-me.parameter-name`)
+
+Her ikisi de `applications/backend/src/main/resources/application.properties`
+içinde tanımlıdır ve `RememberMeNames` bean'i tarafından okunur - hem
+`SecurityConfig`'in `rememberMe()` DSL'i hem de `AuthStatusController` aynı
+bean'i kullanır, böylece iki farklı yerde birbirinden bağımsız yazılmış ama
+"aynı" olması umulan iki string yerine tek bir kaynak vardır (BR-022).
+Frontend tarafı da parametre adını hardcode etmez: `App.jsx`,
+`GET /api/auth-status` yanıtındaki `rememberMeParameter` alanını okuyup
+`LoginForm.jsx`'e prop olarak geçirir; form "Beni hatırla" kutusu
+işaretliyken alanı bu isimle gönderir. Cookie adı frontend'e hiç
+sızdırılmaz - `HttpOnly` olduğu ve `Set-Cookie` ile geldiği için tarayıcı
+onu otomatik yönetir, frontend kodunun bilmesi gerekmez.
+
+Her iki property de silinir/boş bırakılırsa (`app.remember-me.cookie-name`,
+`app.remember-me.parameter-name`), `RememberMeNames` Spring'in kendi
+varsayılanı olan `remember-me`'ye geri düşer - uygulama çökmez, sadece eski
+davranışa döner (UC-015 A1). Formun yanlış/varsayılan bir parametre adı
+göndermesi durumunda (UC-015 A2) - ör. backend `keep-me` beklerken form
+`remember-me` gönderirse - giriş yine başarılı olur, sadece remember-me
+cookie'si üretilmez; bu, Spring Security'nin remember-me filtresinin sadece
+yapılandırılan tam parametre adını araması, başka bir şeyi hata saymaması
+sayesinde kendiliğinden gerçekleşir - bkz. `RememberMeCustomNamesTests`.
+
+DevTools'ta doğrulamak için: "Remember Me" ile giriş yap, Application →
+Cookies altında `notes-rm` satırını gör; Network sekmesinde `/api/login`
+isteğinin gövdesinde `keep-me=true` parametresini gör. Logout sonrası
+`notes-rm` cookie'si `Max-Age=0` ile temizlenmiş olmalı (Faz 3'ün logout
+davranışının bu özel isimle de çalıştığının regresyon kontrolü).
 
 ## Dokümantasyon
 

@@ -14,9 +14,19 @@ import TokenInspectorPage from './TokenInspectorPage'
 // backend actually thinks. `view` picks which screen is visible once a
 // username is known: the notes list, Account Settings (UC-008), or the
 // re-authentication form (UC-009).
+//
+// UC-015/BR-022 (Faz 9): `rememberMeParameterName` is the same idea applied
+// to the remember-me opt-in field name - sourced from the same
+// GET /api/auth-status response (see AuthStatusController on the backend)
+// rather than hardcoded here or in LoginForm, so the frontend can never send
+// a different name than what SecurityConfig's rememberMe() DSL is actually
+// listening for. 'remember-me' as the initial state is only a placeholder
+// until the first fetch resolves (Spring's own default - UC-015 A1) and is
+// never relied on as the source of truth itself.
 function App() {
   const [username, setUsername] = useState(null)
   const [authLevel, setAuthLevel] = useState('ANONYMOUS')
+  const [rememberMeParameterName, setRememberMeParameterName] = useState('remember-me')
   const [checkingSession, setCheckingSession] = useState(true)
   const [view, setView] = useState('notes')
 
@@ -41,8 +51,16 @@ function App() {
 
   async function refreshAuthLevel() {
     const response = await apiGet('/auth-status')
-    const level = response.ok ? (await response.json()).level : 'ANONYMOUS'
+    const body = response.ok ? await response.json() : null
+    const level = body ? body.level : 'ANONYMOUS'
     setAuthLevel(level)
+    // UC-015 A1: if the request fails outright, keep whatever name is
+    // already in state (itself defaulted to Spring's own 'remember-me')
+    // rather than overwriting it with something derived from a failed
+    // response.
+    if (body && body.rememberMeParameter) {
+      setRememberMeParameterName(body.rememberMeParameter)
+    }
     return level
   }
 
@@ -101,7 +119,10 @@ function App() {
   } else if (!username) {
     content = (
       <>
-        <LoginForm onLoginSuccess={handleLoginSuccess} />
+        <LoginForm
+          rememberMeParameterName={rememberMeParameterName}
+          onLoginSuccess={handleLoginSuccess}
+        />
         <p>
           <button type="button" onClick={openTokenInspector}>
             Token Inspector

@@ -3,10 +3,21 @@ import { apiPostForm } from './api'
 
 // UC-001 login form: username, password, error message.
 // UC-002 adds the "Remember Me" checkbox (BR-003: opt-in only - the
-// `remember-me` field is only sent at all when the box is checked, so an
+// remember-me field is only sent at all when the box is checked, so an
 // unchecked submission looks to the backend exactly like a request that
 // never mentioned remember-me, and Spring Security's rememberMe() filter
 // issues no cookie).
+//
+// UC-015/BR-022 (Faz 9): the field NAME that checkbox is sent under is not
+// hardcoded here. `rememberMeParameterName` is passed down from App.jsx,
+// which sourced it from GET /api/auth-status - itself reading the same
+// RememberMeNames bean SecurityConfig's rememberMe() DSL is configured
+// with (see AuthStatusController and SecurityConfig on the backend). This
+// is what keeps frontend and backend from being two independently-edited
+// literals that only happen to agree: application.properties is the only
+// place the name is actually decided. UC-015 A2 (a mismatched name) simply
+// isn't reachable from this form - it only ever sends whatever name the
+// backend just told it to use.
 //
 // A2 (missing fields): caught client-side before any request is sent.
 // A1 (wrong credentials): the backend always replies with one generic
@@ -15,7 +26,7 @@ import { apiPostForm } from './api'
 // credentials while remember-me is checked) falls out of this for free:
 // form-login authentication fails before Spring Security's remember-me
 // filter ever runs, so nothing is produced either way.
-function LoginForm({ onLoginSuccess }) {
+function LoginForm({ onLoginSuccess, rememberMeParameterName = 'remember-me' }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -35,9 +46,9 @@ function LoginForm({ onLoginSuccess }) {
     try {
       const fields = { username, password }
       if (rememberMe) {
-        // Matches Spring Security's default remember-me parameter name
-        // (see SecurityConfig.REMEMBER_ME_PARAMETER on the backend).
-        fields['remember-me'] = 'true'
+        // See the file-level comment: the field name comes from the
+        // backend's GET /api/auth-status response, not a literal here.
+        fields[rememberMeParameterName] = 'true'
       }
       const response = await apiPostForm('/login', fields)
       if (response.ok) {

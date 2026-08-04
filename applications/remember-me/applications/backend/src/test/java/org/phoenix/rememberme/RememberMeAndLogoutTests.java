@@ -56,7 +56,7 @@ class RememberMeAndLogoutTests {
                 .param("username", DemoUserSeeder.DEMO_USERNAME)
                 .param("password", DemoUserSeeder.DEMO_PASSWORD);
         if (rememberMe) {
-            request.param("remember-me", "true");
+            request.param("keep-me", "true");
         }
         return mockMvc.perform(request)
                 .andExpect(status().isOk())
@@ -71,14 +71,14 @@ class RememberMeAndLogoutTests {
         assertThat(result.getRequest().getSession(false)).isNotNull();
         // ...but BR-003 (opt-in only): no remember-me cookie, not even an
         // empty/expired one, when the checkbox wasn't checked.
-        assertThat(result.getResponse().getCookie("remember-me")).isNull();
+        assertThat(result.getResponse().getCookie("notes-rm")).isNull();
     }
 
     @Test
     void checkedLoginProducesAnHttpOnlyRememberMeCookie() throws Exception {
         MvcResult result = login(true);
 
-        Cookie rememberMe = result.getResponse().getCookie("remember-me");
+        Cookie rememberMe = result.getResponse().getCookie("notes-rm");
 
         assertThat(rememberMe).isNotNull();
         // BR-004/NFR-001: not readable by client-side scripts. (JSESSIONID's
@@ -91,7 +91,7 @@ class RememberMeAndLogoutTests {
     @Test
     void rememberMeCookieAloneAuthenticatesWithoutAnySession() throws Exception {
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         // No session attached at all here - proves UC-002's postcondition
@@ -123,21 +123,22 @@ class RememberMeAndLogoutTests {
     @Test
     void logoutClearsTheRememberMeCookieClientSide() throws Exception {
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         MvcResult logoutResult = mockMvc.perform(post("/api/logout").cookie(rememberMe))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        // logout()'s deleteCookies("JSESSIONID", "remember-me") plus
+        // logout()'s deleteCookies("JSESSIONID", rememberMeNames.cookieName())
+        // ("notes-rm") plus
         // TokenBasedRememberMeServices' own LogoutHandler.logout() both
         // reply with an immediately-expiring Set-Cookie: a compliant
         // browser overwrites/drops its stored remember-me cookie right
         // here, which is what actually enforces BR-005 for this cookie in
         // practice (see the class javadoc on why JSESSIONID's equivalent
         // header isn't asserted here).
-        Cookie cleared = logoutResult.getResponse().getCookie("remember-me");
+        Cookie cleared = logoutResult.getResponse().getCookie("notes-rm");
         assertThat(cleared).isNotNull();
         assertThat(cleared.getMaxAge()).isZero();
     }
@@ -146,7 +147,7 @@ class RememberMeAndLogoutTests {
     void a1LogoutStillClearsTheRememberMeCookieEvenWhenTheSessionIsAlreadyInvalidServerSide() throws Exception {
         MvcResult loginResult = login(true);
         MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(session).isNotNull();
         assertThat(rememberMe).isNotNull();
 
@@ -161,7 +162,7 @@ class RememberMeAndLogoutTests {
         MvcResult logoutResult = mockMvc.perform(post("/api/logout").cookie(rememberMe))
                 .andExpect(status().isOk())
                 .andReturn();
-        Cookie cleared = logoutResult.getResponse().getCookie("remember-me");
+        Cookie cleared = logoutResult.getResponse().getCookie("notes-rm");
         assertThat(cleared).isNotNull();
         assertThat(cleared.getMaxAge()).isZero();
     }
@@ -185,7 +186,7 @@ class RememberMeAndLogoutTests {
         // deliberate fix) is a visible, reviewed decision instead of a
         // silent regression either way.
         MvcResult loginResult = login(true);
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(post("/api/logout").cookie(rememberMe))

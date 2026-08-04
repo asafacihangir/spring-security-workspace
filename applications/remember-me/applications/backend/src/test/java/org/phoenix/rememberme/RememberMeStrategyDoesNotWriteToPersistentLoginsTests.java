@@ -53,11 +53,11 @@ class RememberMeStrategyDoesNotWriteToPersistentLoginsTests {
         MvcResult loginResult = mockMvc.perform(post("/api/login")
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
-                        .param("remember-me", "true"))
+                        .param("keep-me", "true"))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        Cookie rememberMe = loginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         long after = countPersistentLoginsForDemoUser();
@@ -70,7 +70,7 @@ class RememberMeStrategyDoesNotWriteToPersistentLoginsTests {
         // (series:token, 2 parts) - TokenBasedRememberMeServices only
         // accepts 3 or 4 parts.
         String fakePersistentModeCookieValue = encode("some-series-value:some-token-value");
-        Cookie crossStrategyCookie = new Cookie("remember-me", fakePersistentModeCookieValue);
+        Cookie crossStrategyCookie = new Cookie("notes-rm", fakePersistentModeCookieValue);
 
         // A2: rejected cleanly (no auto-login, no 500) - falls through to the
         // normal "not authenticated" 401 a protected endpoint gives an

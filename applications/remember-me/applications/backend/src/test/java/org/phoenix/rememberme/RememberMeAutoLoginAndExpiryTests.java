@@ -81,7 +81,7 @@ class RememberMeAutoLoginAndExpiryTests {
                 .param("username", DemoUserSeeder.DEMO_USERNAME)
                 .param("password", DemoUserSeeder.DEMO_PASSWORD);
         if (rememberMe) {
-            request.param("remember-me", "true");
+            request.param("keep-me", "true");
         }
         return mockMvc.perform(request)
                 .andExpect(status().isOk())
@@ -109,7 +109,7 @@ class RememberMeAutoLoginAndExpiryTests {
         // never mistaken for a fully-authenticated session (BR-006 - a
         // "Remembered" level must not grant full-auth-only access).
         MvcResult rememberMeLoginResult = login(true);
-        Cookie rememberMe = rememberMeLoginResult.getResponse().getCookie("remember-me");
+        Cookie rememberMe = rememberMeLoginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
         mockMvc.perform(get("/api/me").cookie(rememberMe))
@@ -126,7 +126,7 @@ class RememberMeAutoLoginAndExpiryTests {
         String passwordHash = userRepository.findByUsername(username).orElseThrow().getPassword();
         long expiredExpiryTime = System.currentTimeMillis() - Duration.ofMinutes(1).toMillis();
 
-        Cookie expired = new Cookie("remember-me",
+        Cookie expired = new Cookie("notes-rm",
                 craftTokenBasedRememberMeCookieValue(username, passwordHash, rememberMeKey, expiredExpiryTime));
 
         // BR-007: rejected outright - no session is granted off the back of
@@ -145,7 +145,7 @@ class RememberMeAutoLoginAndExpiryTests {
         String passwordHash = userRepository.findByUsername(username).orElseThrow().getPassword();
         long farFutureExpiryTime = System.currentTimeMillis() + Duration.ofDays(1).toMillis();
 
-        Cookie stillValid = new Cookie("remember-me",
+        Cookie stillValid = new Cookie("notes-rm",
                 craftTokenBasedRememberMeCookieValue(username, passwordHash, rememberMeKey, farFutureExpiryTime));
 
         mockMvc.perform(get("/api/me").cookie(stillValid))
