@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
@@ -77,7 +78,7 @@ class RememberMeAutoLoginAndExpiryTests {
     private String rememberMeKey;
 
     private MvcResult login(boolean rememberMe) throws Exception {
-        var request = post("/api/login")
+        var request = post("/api/login").with(csrf())
                 .param("username", DemoUserSeeder.DEMO_USERNAME)
                 .param("password", DemoUserSeeder.DEMO_PASSWORD);
         if (rememberMe) {

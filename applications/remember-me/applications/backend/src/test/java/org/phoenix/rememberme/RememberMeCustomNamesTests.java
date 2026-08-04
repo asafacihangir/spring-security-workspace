@@ -3,6 +3,7 @@ package org.phoenix.rememberme;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -42,7 +43,7 @@ class RememberMeCustomNamesTests {
 
     @Test
     void setCookieHeaderCarriesTheConfiguredCustomCookieName() throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/login")
+        MvcResult result = mockMvc.perform(post("/api/login").with(csrf())
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
                         .param("keep-me", "true"))
@@ -64,7 +65,7 @@ class RememberMeCustomNamesTests {
 
     @Test
     void customParameterNameTriggersRememberMe() throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/login")
+        MvcResult result = mockMvc.perform(post("/api/login").with(csrf())
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
                         .param("keep-me", "true"))
@@ -87,7 +88,7 @@ class RememberMeCustomNamesTests {
         // error - so this proves login succeeds regardless (username/password
         // were still correct) and simply produces no remember-me cookie,
         // rather than assuming that behavior.
-        MvcResult result = mockMvc.perform(post("/api/login")
+        MvcResult result = mockMvc.perform(post("/api/login").with(csrf())
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
                         .param("remember-me", "true"))

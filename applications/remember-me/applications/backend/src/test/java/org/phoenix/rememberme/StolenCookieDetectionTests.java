@@ -92,9 +92,29 @@ class StolenCookieDetectionTests {
         jdbcTemplate.update("delete from persistent_logins where username = ?", DemoUserSeeder.DEMO_USERNAME);
     }
 
+    /**
+     * Final-review fix-round (CSRF): a real embedded server enforces CSRF
+     * for real now, so - unlike {@code MockMvc}'s {@code .with(csrf())}
+     * post-processor shortcut used elsewhere in this suite - the login POST
+     * needs an actual token/cookie round-trip: fetch the
+     * {@code XSRF-TOKEN} cookie from a plain GET first, then send it back
+     * both as a {@code Cookie} header (so the server can compare) and as the
+     * {@code X-XSRF-TOKEN} header (what {@code CsrfFilter} actually reads),
+     * exactly like {@code api.js} does for the real frontend.
+     */
+    private String fetchCsrfToken() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/api/auth-status", String.class);
+        String token = extractCookieValue(response, "XSRF-TOKEN");
+        assertThat(token).as("a GET request must set an XSRF-TOKEN cookie").isNotNull();
+        return token;
+    }
+
     private String loginWithRememberMeAndCaptureCookie() {
+        String csrfToken = fetchCsrfToken();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.add(HttpHeaders.COOKIE, "XSRF-TOKEN=" + csrfToken);
+        headers.add("X-XSRF-TOKEN", csrfToken);
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("username", DemoUserSeeder.DEMO_USERNAME);
         form.add("password", DemoUserSeeder.DEMO_PASSWORD);
@@ -106,7 +126,7 @@ class StolenCookieDetectionTests {
                 String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        String cookieValue = extractRememberMeCookieValue(response);
+        String cookieValue = extractCookieValue(response, "notes-rm");
         assertThat(cookieValue).as("login with keep-me=true must set a notes-rm cookie").isNotNull();
         return cookieValue;
     }
@@ -121,14 +141,19 @@ class StolenCookieDetectionTests {
     }
 
     private static String extractRememberMeCookieValue(ResponseEntity<?> response) {
+        return extractCookieValue(response, "notes-rm");
+    }
+
+    private static String extractCookieValue(ResponseEntity<?> response, String cookieName) {
         List<String> setCookieHeaders = response.getHeaders().get(HttpHeaders.SET_COOKIE);
         if (setCookieHeaders == null) {
             return null;
         }
+        String prefix = cookieName + "=";
         for (String header : setCookieHeaders) {
-            if (header.startsWith("notes-rm=")) {
+            if (header.startsWith(prefix)) {
                 String pair = header.split(";", 2)[0];
-                return pair.substring("notes-rm=".length());
+                return pair.substring(prefix.length());
             }
         }
         return null;

@@ -4,6 +4,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -87,7 +88,7 @@ class NoteControllerTests {
     }
 
     private long createNote(MockHttpSession session, String title, String content) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/notes").session(session)
+        MvcResult result = mockMvc.perform(post("/api/notes").with(csrf()).session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new NoteRequest(title, content))))
                 .andExpect(status().isCreated())
@@ -113,7 +114,7 @@ class NoteControllerTests {
                 .andExpect(jsonPath("$.title").value("Alisveris listesi"));
 
         // A1: update.
-        mockMvc.perform(put("/api/notes/" + id).session(session)
+        mockMvc.perform(put("/api/notes/" + id).with(csrf()).session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new NoteRequest("Guncellenmis baslik", "Yumurta"))))
                 .andExpect(status().isOk())
@@ -121,7 +122,7 @@ class NoteControllerTests {
                 .andExpect(jsonPath("$.content").value("Yumurta"));
 
         // A2: delete, then confirm it is gone.
-        mockMvc.perform(delete("/api/notes/" + id).session(session))
+        mockMvc.perform(delete("/api/notes/" + id).with(csrf()).session(session))
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/notes/" + id).session(session))
                 .andExpect(status().isNotFound());
@@ -135,7 +136,7 @@ class NoteControllerTests {
 
         int notesBefore = noteRepository.findByOwnerUsernameOrderByIdDesc(DemoUserSeeder.DEMO_USERNAME).size();
 
-        mockMvc.perform(post("/api/notes").session(session)
+        mockMvc.perform(post("/api/notes").with(csrf()).session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new NoteRequest("   ", "content"))))
                 .andExpect(status().isBadRequest());
@@ -146,7 +147,7 @@ class NoteControllerTests {
                 .hasSize(notesBefore);
 
         long id = createNote(session, "Gecerli baslik", "content");
-        mockMvc.perform(put("/api/notes/" + id).session(session)
+        mockMvc.perform(put("/api/notes/" + id).with(csrf()).session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new NoteRequest("", "yeni icerik"))))
                 .andExpect(status().isBadRequest());
@@ -167,12 +168,12 @@ class NoteControllerTests {
         mockMvc.perform(get("/api/notes/" + id).session(otherSession))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(put("/api/notes/" + id).session(otherSession)
+        mockMvc.perform(put("/api/notes/" + id).with(csrf()).session(otherSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new NoteRequest("Ele gecirilmis", "x"))))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(delete("/api/notes/" + id).session(otherSession))
+        mockMvc.perform(delete("/api/notes/" + id).with(csrf()).session(otherSession))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(get("/api/notes").session(otherSession))

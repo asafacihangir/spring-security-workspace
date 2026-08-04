@@ -1,6 +1,8 @@
 package org.phoenix.rememberme;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -26,9 +28,32 @@ import org.springframework.security.web.authentication.session.ChangeSessionIdAu
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 /**
- * Faz 1: session-based form login (UC-001). Faz 3 adds token-based
+ * <b>What this filter chain does today</b> (all 11 phases, final-review
+ * fix-round): session-based form login at {@code /api/login} for a single
+ * demo user; opt-in remember-me that is either a stateless HMAC cookie or a
+ * database-backed {@code persistent_logins} record, switched purely by
+ * {@code app.remember-me.strategy} and optionally bound to the client IP
+ * ({@code app.remember-me.ip-binding-enabled}, persistent-only); logout at
+ * {@code /api/logout} that clears both the session and every remember-me
+ * cookie/record; {@code isFullyAuthenticated()}-gated {@code /api/account}
+ * so a remembered-only session cannot touch account settings without
+ * re-entering the password; CSRF protection via a JS-readable
+ * {@code XSRF-TOKEN} cookie and an {@code X-XSRF-TOKEN} request header,
+ * covering every mutating endpoint; and two intentionally {@code permitAll}
+ * teaching endpoints, {@code /api/auth-status} and
+ * {@code /api/token-inspector} (the latter exposes live remember-me
+ * credentials with no auth gate on purpose - see that controller's own
+ * javadoc for why, and the explicit warning attached to it). The
+ * phase-by-phase narrative below records how each piece arrived and why it
+ * looks the way it does; it is kept as history, not as the primary
+ * reference for "what does this class do right now."
+ *
+ * <p>Faz 1: session-based form login (UC-001). Faz 3 adds token-based
  * remember-me (UC-002) and an explicit logout endpoint (UC-003).
  *
  * <p>The React SPA posts credentials to {@code /api/login} as a regular
@@ -43,9 +68,30 @@ import org.springframework.security.web.context.SecurityContextRepository;
  * makes browsers pop up their native auth dialog and hang the calling
  * {@code fetch()}, as found during Faz 0).
  *
- * <p>CSRF protection is out of scope for this lab (no requirement in
- * requirements.md/plan.md covers it across any phase); it is disabled here
- * rather than half-implemented.
+ * <p><b>CSRF (final-review fix-round):</b> enabled via
+ * {@code CookieCsrfTokenRepository.withHttpOnlyFalse()} - the token cookie
+ * ({@code XSRF-TOKEN}) must be {@code HttpOnly=false} so the SPA's own
+ * JavaScript can read it and echo it back as the {@code X-XSRF-TOKEN}
+ * header on every mutating request (POST/PUT/DELETE); see {@code api.js} on
+ * the frontend for that half. This does not weaken anything: unlike
+ * {@code JSESSIONID} and the remember-me cookie (both still {@code HttpOnly},
+ * NFR-001 untouched), the CSRF token cookie is not a credential by itself -
+ * an attacker who can read it via XSS could forge a matching request anyway,
+ * with or without CSRF protection in place, and this token proves nothing
+ * except "some script running on this origin saw the cookie", which is
+ * exactly what the header round-trip is designed to require from a
+ * same-origin script and deny to a cross-origin form/link. The handler is
+ * {@link CsrfTokenRequestAttributeHandler} rather than Spring Security's
+ * BREACH-protection-aware default ({@code XorCsrfTokenRequestAttributeHandler}):
+ * that default defers token resolution and masks the value it writes to the
+ * response, which is the right choice for server-rendered pages but is
+ * incompatible with a plain SPA pattern where JS reads the raw cookie value
+ * directly and sends it back unmodified - Spring's own reference docs
+ * recommend this exact swap for that integration style. One more piece is
+ * needed beyond the DSL config here: see {@link CsrfCookieFilter}, added
+ * near the bottom of this method via {@code addFilterAfter(...)}, for why
+ * the cookie would otherwise never actually get written for a pure JSON
+ * API.
  *
  * <p><b>Remember-me (UC-002, FR-002/FR-003):</b> {@code rememberMe()} wires
  * either Spring Security's default {@code TokenBasedRememberMeServices} - a
@@ -261,23 +307,28 @@ public class SecurityConfig {
             UserDetailsService userDetailsService,
             JdbcTemplate jdbcTemplate,
             SecurityContextRepository securityContextRepository,
-            SessionAuthenticationStrategy sessionAuthenticationStrategy) throws Exception {
+            SessionAuthenticationStrategy sessionAuthenticationStrategy,
+            ObjectMapper objectMapper) throws Exception {
         // Faz 7 fix-round: shared with both .exceptionHandling(...) below and
         // CookieTheftExceptionTranslationFilter, so a theft replay and every
         // other unauthenticated request produce byte-for-byte the same 401 -
         // see that filter's javadoc for why it exists at all.
         AuthenticationEntryPoint authenticationEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .securityContext(securityContext -> securityContext
                         .securityContextRepository(securityContextRepository))
                 .sessionManagement(session -> session
                         .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
                 .authorizeHttpRequests(auth -> auth
                         // Faz 7 (UC-013): /api/token-inspector joins /api/auth-status here -
-                        // see TokenInspectorController's javadoc "Access control" section for
-                        // why a debugging/teaching endpoint over a single-demo-user table has
-                        // no per-caller boundary to enforce.
+                        // this exposes live remember-me bearer credentials with zero auth,
+                        // solely because UC-012's stolen-cookie walkthrough requires copying a
+                        // real cookie value; see TokenInspectorController's javadoc "Access
+                        // control" section for the full reasoning and an explicit warning that
+                        // no production system should ever expose an endpoint like this.
                         .requestMatchers("/api/health", "/api/logout", "/api/auth-status", "/api/token-inspector")
                         .permitAll()
                         // BR-010/BR-011: isFullyAuthenticated(), not just authenticated() -
@@ -292,7 +343,13 @@ public class SecurityConfig {
                             response.setStatus(HttpServletResponse.SC_OK);
                             response.setCharacterEncoding("UTF-8");
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.getWriter().write("{\"username\":\"" + authentication.getName() + "\"}");
+                            // Map.of(...) + ObjectMapper, not string concatenation, so a
+                            // username containing a quote character can never produce
+                            // malformed JSON - consistent with how every other controller
+                            // in this app (AuthStatusController, MeController, ...) builds
+                            // its response body.
+                            objectMapper.writeValue(response.getWriter(),
+                                    Map.of("username", authentication.getName()));
                         })
                         .failureHandler((request, response, exception) -> {
                             // BR-002: one generic message, regardless of whether the
@@ -300,7 +357,8 @@ public class SecurityConfig {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setCharacterEncoding("UTF-8");
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.getWriter().write("{\"error\":\"Kullanıcı adı veya şifre hatalı.\"}");
+                            objectMapper.writeValue(response.getWriter(),
+                                    Map.of("error", "Kullanıcı adı veya şifre hatalı."));
                         })
                         .permitAll())
                 .rememberMe(remember -> {
@@ -374,7 +432,12 @@ public class SecurityConfig {
                 // CookieTheftExceptionTranslationFilter's javadoc for the
                 // full mechanics and why this was needed at all.
                 .addFilterBefore(new CookieTheftExceptionTranslationFilter(authenticationEntryPoint),
-                        RememberMeAuthenticationFilter.class);
+                        RememberMeAuthenticationFilter.class)
+                // CSRF fix-round: forces the XSRF-TOKEN cookie to actually be
+                // written on every request - see CsrfCookieFilter's javadoc for
+                // why CookieCsrfTokenRepository alone does not do this for a
+                // pure JSON API with no server-rendered view to trigger it.
+                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class);
         return http.build();
     }
 

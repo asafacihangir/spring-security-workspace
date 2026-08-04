@@ -2,6 +2,7 @@ package org.phoenix.rememberme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
@@ -29,10 +30,26 @@ import org.springframework.test.web.servlet.MvcResult;
  * separate Spring context with the override, rather than touching the
  * shared {@code application.properties} default (1209600s / 14 days) that
  * every other test class in this suite relies on.
+ *
+ * <p>{@code cleanup-interval-ms=999999999} mirrors
+ * {@link ExpiredPersistentLoginCleanupJobTests}'s same override, for the
+ * same reason: {@code @Scheduled(fixedRateString=...)} runs its first
+ * execution immediately on context startup (no implicit initial delay), and
+ * this class's own {@code token-validity-seconds=5} would otherwise make
+ * that very first run treat anything older than 5 seconds as expired -
+ * against the one shared MySQL instance every test class in this suite
+ * points at. This class only exercises token-mode remember-me and never
+ * asserts on {@code persistent_logins} rows itself, so nothing here was ever
+ * observed to break from that race, but the hazard is real (a
+ * persistent-mode test creating rows around the same wall-clock moment this
+ * context boots) and not worth relying on timing to avoid.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "app.remember-me.token-validity-seconds=5")
+@TestPropertySource(properties = {
+        "app.remember-me.token-validity-seconds=5",
+        "app.remember-me.cleanup-interval-ms=999999999"
+})
 class RememberMeTokenValiditySecondsIsConfigurableTests {
 
     @Autowired
@@ -42,7 +59,7 @@ class RememberMeTokenValiditySecondsIsConfigurableTests {
     void configuredTokenValiditySecondsControlsTheIssuedCookiesExpiry() throws Exception {
         long beforeLogin = System.currentTimeMillis();
 
-        MvcResult loginResult = mockMvc.perform(post("/api/login")
+        MvcResult loginResult = mockMvc.perform(post("/api/login").with(csrf())
                         .param("username", DemoUserSeeder.DEMO_USERNAME)
                         .param("password", DemoUserSeeder.DEMO_PASSWORD)
                         .param("keep-me", "true"))

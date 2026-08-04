@@ -3,6 +3,7 @@ package org.phoenix.rememberme;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,7 +53,7 @@ class AuthLevelAndAccountSettingsTests {
     private MockMvc mockMvc;
 
     private MvcResult login(boolean rememberMe) throws Exception {
-        var request = post("/api/login")
+        var request = post("/api/login").with(csrf())
                 .param("username", DemoUserSeeder.DEMO_USERNAME)
                 .param("password", DemoUserSeeder.DEMO_PASSWORD);
         if (rememberMe) {
@@ -134,7 +135,7 @@ class AuthLevelAndAccountSettingsTests {
         mockMvc.perform(get("/api/account").cookie(rememberMe))
                 .andExpect(status().isUnauthorized());
 
-        MvcResult reauthResult = mockMvc.perform(post("/api/reauthenticate")
+        MvcResult reauthResult = mockMvc.perform(post("/api/reauthenticate").with(csrf())
                         .cookie(rememberMe)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"password\":\"" + DemoUserSeeder.DEMO_PASSWORD + "\"}"))
@@ -160,7 +161,7 @@ class AuthLevelAndAccountSettingsTests {
         Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
-        mockMvc.perform(post("/api/reauthenticate")
+        mockMvc.perform(post("/api/reauthenticate").with(csrf())
                         .cookie(rememberMe)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"password\":\"not-the-password\"}"))
@@ -198,7 +199,7 @@ class AuthLevelAndAccountSettingsTests {
         MockHttpSession preExistingSession = new MockHttpSession();
         String originalSessionId = preExistingSession.getId();
 
-        MvcResult reauthResult = mockMvc.perform(post("/api/reauthenticate")
+        MvcResult reauthResult = mockMvc.perform(post("/api/reauthenticate").with(csrf())
                         .session(preExistingSession)
                         .cookie(rememberMe)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -231,7 +232,7 @@ class AuthLevelAndAccountSettingsTests {
         Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
-        mockMvc.perform(post("/api/reauthenticate")
+        mockMvc.perform(post("/api/reauthenticate").with(csrf())
                         .cookie(rememberMe)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"someone-else\",\"password\":\""

@@ -3,6 +3,7 @@ package org.phoenix.rememberme;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
@@ -52,7 +53,7 @@ class RememberMeAndLogoutTests {
     private MockMvc mockMvc;
 
     private MvcResult login(boolean rememberMe) throws Exception {
-        var request = post("/api/login")
+        var request = post("/api/login").with(csrf())
                 .param("username", DemoUserSeeder.DEMO_USERNAME)
                 .param("password", DemoUserSeeder.DEMO_PASSWORD);
         if (rememberMe) {
@@ -110,7 +111,7 @@ class RememberMeAndLogoutTests {
         mockMvc.perform(get("/api/me").session(session))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/logout").session(session))
+        mockMvc.perform(post("/api/logout").with(csrf()).session(session))
                 .andExpect(status().isOk());
 
         // BR-005 (session half): the exact same session that worked above
@@ -126,7 +127,7 @@ class RememberMeAndLogoutTests {
         Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
-        MvcResult logoutResult = mockMvc.perform(post("/api/logout").cookie(rememberMe))
+        MvcResult logoutResult = mockMvc.perform(post("/api/logout").with(csrf()).cookie(rememberMe))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -159,7 +160,7 @@ class RememberMeAndLogoutTests {
         // A1: logout must not error out or silently skip cookie clearing
         // just because the session is already gone - it still replies 200
         // and still emits a Set-Cookie that expires the remember-me cookie.
-        MvcResult logoutResult = mockMvc.perform(post("/api/logout").cookie(rememberMe))
+        MvcResult logoutResult = mockMvc.perform(post("/api/logout").with(csrf()).cookie(rememberMe))
                 .andExpect(status().isOk())
                 .andReturn();
         Cookie cleared = logoutResult.getResponse().getCookie("notes-rm");
@@ -189,7 +190,7 @@ class RememberMeAndLogoutTests {
         Cookie rememberMe = loginResult.getResponse().getCookie("notes-rm");
         assertThat(rememberMe).isNotNull();
 
-        mockMvc.perform(post("/api/logout").cookie(rememberMe))
+        mockMvc.perform(post("/api/logout").with(csrf()).cookie(rememberMe))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/me").cookie(rememberMe))
@@ -203,7 +204,7 @@ class RememberMeAndLogoutTests {
         // browser) hitting /api/logout must not blow up - LogoutFilter runs
         // ahead of the authorization check, so this never needs permitAll
         // to behave, but the endpoint is explicitly permitAll'd anyway.
-        mockMvc.perform(post("/api/logout"))
+        mockMvc.perform(post("/api/logout").with(csrf()))
                 .andExpect(status().isOk());
     }
 
