@@ -2,33 +2,55 @@ import { useEffect, useState } from 'react'
 import { apiGet, apiPost } from './api'
 import LoginForm from './LoginForm'
 import NotesPage from './NotesPage'
+import AuthIndicator from './AuthIndicator'
+import AccountSettingsPage from './AccountSettingsPage'
+import ReauthPage from './ReauthPage'
 
+// UC-007/008/009 (Faz 5): `authLevel` is this app's single piece of state
+// for the Anonymous/Remembered/Fully Authenticated indicator (BR-009),
+// always sourced from GET /api/auth-status - never inferred locally from
+// "did login just succeed" or similar, so it can never drift from what the
+// backend actually thinks. `view` picks which screen is visible once a
+// username is known: the notes list, Account Settings (UC-008), or the
+// re-authentication form (UC-009).
 function App() {
   const [username, setUsername] = useState(null)
+  const [authLevel, setAuthLevel] = useState('ANONYMOUS')
   const [checkingSession, setCheckingSession] = useState(true)
+  const [view, setView] = useState('notes')
 
   useEffect(() => {
     let cancelled = false
-    apiGet('/me')
-      .then(async (response) => {
-        if (cancelled) return
-        if (response.ok) {
+    ;(async () => {
+      const level = await refreshAuthLevel()
+      if (!cancelled && level !== 'ANONYMOUS') {
+        const response = await apiGet('/me')
+        if (!cancelled && response.ok) {
           const body = await response.json()
           setUsername(body.username)
         }
-      })
-      .finally(() => {
-        if (!cancelled) setCheckingSession(false)
-      })
+      }
+      if (!cancelled) setCheckingSession(false)
+    })()
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function refreshAuthLevel() {
+    const response = await apiGet('/auth-status')
+    const level = response.ok ? (await response.json()).level : 'ANONYMOUS'
+    setAuthLevel(level)
+    return level
+  }
 
   async function handleLoginSuccess() {
     const response = await apiGet('/me')
     const body = await response.json()
     setUsername(body.username)
+    setView('notes')
+    await refreshAuthLevel()
   }
 
   // UC-003: the backend has already invalidated the session and cleared
@@ -39,16 +61,49 @@ function App() {
   async function handleLogout() {
     await apiPost('/logout')
     setUsername(null)
+    setView('notes')
+    await refreshAuthLevel()
+  }
+
+  // UC-008 A1: Account Settings itself (not this button) is what actually
+  // decides whether the caller is let in - see AccountSettingsPage, which
+  // reacts to a 401/403 from the backend by calling onNeedsReauth.
+  function openAccountSettings() {
+    setView('account')
+  }
+
+  function needsReauth() {
+    setView('reauth')
+  }
+
+  // UC-009 main scenario step 5: back to the page that sent the user here.
+  async function handleReauthSuccess() {
+    await refreshAuthLevel()
+    setView('account')
   }
 
   if (checkingSession) {
     return null
   }
 
-  return username ? (
-    <NotesPage username={username} onLogout={handleLogout} />
-  ) : (
-    <LoginForm onLoginSuccess={handleLoginSuccess} />
+  let content
+  if (!username) {
+    content = <LoginForm onLoginSuccess={handleLoginSuccess} />
+  } else if (view === 'account') {
+    content = <AccountSettingsPage onNeedsReauth={needsReauth} onBack={() => setView('notes')} />
+  } else if (view === 'reauth') {
+    content = <ReauthPage onSuccess={handleReauthSuccess} onCancel={() => setView('notes')} />
+  } else {
+    content = (
+      <NotesPage username={username} onLogout={handleLogout} onOpenAccountSettings={openAccountSettings} />
+    )
+  }
+
+  return (
+    <>
+      <AuthIndicator level={authLevel} />
+      {content}
+    </>
   )
 }
 

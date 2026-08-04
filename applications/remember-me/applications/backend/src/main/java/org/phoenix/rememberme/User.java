@@ -28,6 +28,14 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    /**
+     * Faz 5 (UC-008): the one piece of "account info" Account Settings
+     * exposes. Deliberately minimal and nullable - the point of this phase
+     * is the access-control rule around this page, not the data on it.
+     */
+    @Column(name = "display_name")
+    private String displayName;
+
     protected User() {
         // JPA
     }
@@ -47,6 +55,14 @@ public class User {
 
     public String getPassword() {
         return password;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
 }

@@ -6,12 +6,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AuthenticationTrustResolver;
+import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 
 /**
  * Faz 1: session-based form login (UC-001). Faz 3 adds token-based
@@ -68,6 +73,31 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
  * runs every logout handler - including cookie clearing - even when the
  * session is already invalid server-side (A1): nothing here depends on the
  * caller being authenticated first.
+ *
+ * <p><b>Faz 5 (UC-007/008/009):</b> two more pieces live here beyond the
+ * plain {@code authorizeHttpRequests} rules:
+ * <ul>
+ * <li>{@code /api/auth-status} is {@code permitAll} - it is UC-007's
+ * indicator source and must answer "Anonymous" for an anonymous caller
+ * too, not 401 it away.
+ * <li>{@code /api/account} (and any sub-path) uses
+ * {@code .access(new WebExpressionAuthorizationManager("isFullyAuthenticated()"))}
+ * instead of the plain {@code authenticated()} the rest of the app uses.
+ * This is BR-010/BR-011's actual enforcement point: {@code authenticated()}
+ * alone would let a {@code RememberMeAuthenticationToken} through (its
+ * {@code isAuthenticated()} is true), which is exactly the gap a Remembered
+ * session viewing/changing account info would exploit. The
+ * {@code isFullyAuthenticated()} SpEL rule, backed by Spring Security's
+ * {@code AuthenticatedVoter}/{@code AuthenticationTrustResolver} semantics,
+ * is what actually excludes remember-me-only sessions - see
+ * {@link AuthLevel} for the same trust-resolver logic reused for the
+ * indicator itself.
+ * </ul>
+ * The {@link #securityContextRepository()} bean below is shared between
+ * this filter chain and {@link ReauthenticationController}, which needs the
+ * exact same repository instance to explicitly persist an upgraded
+ * {@code Authentication} back into the caller's session (see that class's
+ * javadoc for why the save has to be explicit in Spring Security 6).
  */
 @Configuration
 public class SecurityConfig {
@@ -88,14 +118,50 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder(12);
     }
 
+    /**
+     * Faz 5: {@link AuthLevel} and {@link AuthStatusController} classify the
+     * current {@code Authentication} purely off what this resolver already
+     * knows (Anonymous/Remembered) - a single Spring Security-provided
+     * source of truth, not a second, hand-rolled notion of "level".
+     */
+    @Bean
+    AuthenticationTrustResolver authenticationTrustResolver() {
+        return new AuthenticationTrustResolverImpl();
+    }
+
+    /**
+     * Faz 5: exposed as its own bean (rather than left as the DSL's
+     * implicit default) so {@link ReauthenticationController} can inject
+     * this exact instance and explicitly persist an upgraded
+     * {@code Authentication} into it - see that class's javadoc for why the
+     * save must be explicit under Spring Security 6's
+     * {@code SecurityContextHolderFilter}. Plain
+     * {@code HttpSessionSecurityContextRepository} (not the
+     * request-attribute-wrapping {@code Delegating} variant the DSL would
+     * otherwise default to) is enough here: this app is entirely
+     * session-based already, nothing stateless to optimize around.
+     */
+    @Bean
+    SecurityContextRepository securityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
+
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http,
             @Value("${app.remember-me.key}") String rememberMeKey,
-            @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds) throws Exception {
+            @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds,
+            SecurityContextRepository securityContextRepository) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .securityContext(securityContext -> securityContext
+                        .securityContextRepository(securityContextRepository))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/health", "/api/logout").permitAll()
+                        .requestMatchers("/api/health", "/api/logout", "/api/auth-status").permitAll()
+                        // BR-010/BR-011: isFullyAuthenticated(), not just authenticated() -
+                        // a RememberMeAuthenticationToken satisfies the latter but must not
+                        // satisfy the former. See class javadoc.
+                        .requestMatchers("/api/account", "/api/account/**")
+                        .access(new WebExpressionAuthorizationManager("isFullyAuthenticated()"))
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginProcessingUrl("/api/login")
