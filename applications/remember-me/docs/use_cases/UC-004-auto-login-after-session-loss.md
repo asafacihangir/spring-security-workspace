@@ -6,7 +6,7 @@
 **Use Case Name:** Auto-Login After Session Loss
 **Primary Actor:** Not Kullanıcısı
 **Goal:** Oturum sona erdiğinde, kimlik bilgilerini yeniden girmeden remember-me cookie'siyle otomatik olarak doğrulanıp kaldığı yerden devam etmek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

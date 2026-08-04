@@ -6,7 +6,7 @@
 **Use Case Name:** Expired Token Rejection
 **Primary Actor:** Öğrenen
 **Goal:** Geçerlilik süresi dolmuş bir remember-me cookie'sinin otomatik girişte reddedildiğini gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

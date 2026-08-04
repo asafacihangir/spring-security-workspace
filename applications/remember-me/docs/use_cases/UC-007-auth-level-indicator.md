@@ -6,7 +6,7 @@
 **Use Case Name:** Auth Level Indicator
 **Primary Actor:** Öğrenen
 **Goal:** Arayüzdeki göstergeden anlık kimlik doğrulama seviyesini (Anonymous / Remembered / Fully Authenticated) izleyerek üç seviye arasındaki farkı gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

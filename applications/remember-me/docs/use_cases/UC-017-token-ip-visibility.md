@@ -6,7 +6,7 @@
 **Use Case Name:** Token IP Visibility
 **Primary Actor:** Öğrenen
 **Goal:** Arayüzde her hatırlanma kaydının hangi IP adresine bağlı olduğunu görerek hırsızlık senaryosunda IP-binding davranışını doğrulamak
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

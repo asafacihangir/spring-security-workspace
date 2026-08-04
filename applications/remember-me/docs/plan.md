@@ -27,8 +27,8 @@ Kurallar:
 
 **Checkpoint 0 (Review):**
 
-- [ ] `infra.yml`, Taskfile ve proje yapısı gözden geçirildi; workspace'teki diğer uygulamalarla tutarlı.
-- [ ] Bağımlılık listesinde gereksiz kütüphane yok.
+- [x] `infra.yml`, Taskfile ve proje yapısı gözden geçirildi; workspace'teki diğer uygulamalarla tutarlı.
+- [x] Bağımlılık listesinde gereksiz kütüphane yok.
 
 **Doğrulanacak Sonuçlar:**
 
@@ -59,9 +59,9 @@ Kurallar:
 
 **Checkpoint 1 (Review):**
 
-- [ ] Security yapılandırması gözden geçirildi: sadece login/statik uçlar açık, kalanı korumalı.
-- [ ] UC-001 ana senaryo ve A1/A2 alternatif akışları kodla karşılaştırıldı.
-- [ ] Şifrenin hiçbir yerde düz metin persist edilmediği doğrulandı (BR-002: genel hata mesajı dahil).
+- [x] Security yapılandırması gözden geçirildi: sadece login/statik uçlar açık, kalanı korumalı.
+- [x] UC-001 ana senaryo ve A1/A2 alternatif akışları kodla karşılaştırıldı.
+- [x] Şifrenin hiçbir yerde düz metin persist edilmediği doğrulandı (BR-002: genel hata mesajı dahil).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -94,8 +94,8 @@ Kurallar:
 
 **Checkpoint 2 (Review):**
 
-- [ ] Sahiplik denetimi her uçta var; UC-006 A1–A3 akışları kodla karşılaştırıldı.
-- [ ] Boş başlık gibi geçersiz girdi backend'de reddediliyor (yalnızca frontend doğrulamasına güvenilmiyor).
+- [x] Sahiplik denetimi her uçta var; UC-006 A1–A3 akışları kodla karşılaştırıldı.
+- [x] Boş başlık gibi geçersiz girdi backend'de reddediliyor (yalnızca frontend doğrulamasına güvenilmiyor).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -125,9 +125,9 @@ Kurallar:
 
 **Checkpoint 3 (Review):**
 
-- [ ] Checkbox işaretli değilken cookie üretilmediği kod ve testle doğrulandı (BR-003).
-- [ ] UC-002 ve UC-003 akışları (A1 dahil) kodla karşılaştırıldı.
-- [ ] Her iki cookie HttpOnly (NFR-001 kapanışı).
+- [x] Checkbox işaretli değilken cookie üretilmediği kod ve testle doğrulandı (BR-003).
+- [x] UC-002 ve UC-003 akışları (A1 dahil) kodla karşılaştırıldı.
+- [x] Her iki cookie HttpOnly (NFR-001 kapanışı).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -156,8 +156,8 @@ Kurallar:
 
 **Checkpoint 4 (Review):**
 
-- [ ] UC-004 (A1, A2) ve UC-005 akışları davranışla karşılaştırıldı.
-- [ ] Otomatik girişin "Remembered" seviyesi ürettiği (fully auth değil) doğrulandı — Faz 5'in ön şartı.
+- [x] UC-004 (A1, A2) ve UC-005 akışları davranışla karşılaştırıldı.
+- [x] Otomatik girişin "Remembered" seviyesi ürettiği (fully auth değil) doğrulandı — Faz 5'in ön şartı.
 
 **Doğrulanacak Sonuçlar:**
 
@@ -187,9 +187,9 @@ Kurallar:
 
 **Checkpoint 5 (Review):**
 
-- [ ] UC-007/008/009 akışları (tüm alternatifler) kodla karşılaştırıldı.
-- [ ] Remembered → Account Settings engeli backend'de (yalnızca UI gizlemesi değil).
-- [ ] Yükseltmenin yalnızca aynı hesabın şifresiyle olduğu doğrulandı (BR-012).
+- [x] UC-007/008/009 akışları (tüm alternatifler) kodla karşılaştırıldı.
+- [x] Remembered → Account Settings engeli backend'de (yalnızca UI gizlemesi değil).
+- [x] Yükseltmenin yalnızca aynı hesabın şifresiyle olduğu doğrulandı (BR-012).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -219,8 +219,8 @@ Kurallar:
 
 **Checkpoint 6 (Review):**
 
-- [ ] Geçişin gerçekten sadece property değişikliği olduğu doğrulandı: mod değişiminde `git diff` boş (NFR-005).
-- [ ] UC-010 akışları (A1, A2) davranışla karşılaştırıldı.
+- [x] Geçişin gerçekten sadece property değişikliği olduğu doğrulandı: mod değişiminde `git diff` boş (NFR-005).
+- [x] UC-010 akışları (A1, A2) davranışla karşılaştırıldı.
 
 **Doğrulanacak Sonuçlar:**
 
@@ -249,8 +249,8 @@ Kurallar:
 
 **Checkpoint 7 (Review):**
 
-- [ ] UC-011/012/013 akışları uçtan uca elle çalıştırıldı ve gözlemler use case'lerdeki beklentilerle eşleşti.
-- [ ] Inspector'ın tazeliği ölçüldü (yenileme sonrası ≤ 2 sn, NFR-004).
+- [x] UC-011/012/013 akışları uçtan uca elle çalıştırıldı ve gözlemler use case'lerdeki beklentilerle eşleşti.
+- [x] Inspector'ın tazeliği ölçüldü (yenileme sonrası ≤ 2 sn, NFR-004).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -281,8 +281,8 @@ Kurallar:
 
 **Checkpoint 8 (Review):**
 
-- [ ] Silme kriteri gözden geçirildi: yalnızca süresi dolmuş satırlar (BR-020).
-- [ ] UC-014 A1 (DB kapalı) senaryosu elle test edildi; uygulama istek karşılamaya devam etti (BR-021).
+- [x] Silme kriteri gözden geçirildi: yalnızca süresi dolmuş satırlar (BR-020).
+- [x] UC-014 A1 (DB kapalı) senaryosu elle test edildi; uygulama istek karşılamaya devam etti (BR-021).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -311,8 +311,8 @@ Kurallar:
 
 **Checkpoint 9 (Review):**
 
-- [ ] Frontend/backend isim eşleşmesi tek kaynaktan (config) geliyor; UC-015 A1/A2 kodla karşılaştırıldı.
-- [ ] Logout özel adlı cookie'yi de siliyor (Faz 3 regresyon kontrolü).
+- [x] Frontend/backend isim eşleşmesi tek kaynaktan (config) geliyor; UC-015 A1/A2 kodla karşılaştırıldı.
+- [x] Logout özel adlı cookie'yi de siliyor (Faz 3 regresyon kontrolü).
 
 **Doğrulanacak Sonuçlar:**
 
@@ -342,9 +342,9 @@ Kurallar:
 
 **Checkpoint 10 (Review):**
 
-- [ ] UC-016 (A1, A2) ve UC-017 akışları elle uçtan uca çalıştırıldı.
-- [ ] IP kontrolünün yalnızca binding etkinken devrede olduğu doğrulandı (BR-023).
-- [ ] Regresyon: binding kapalıyken Faz 3–9 davranışları değişmedi.
+- [x] UC-016 (A1, A2) ve UC-017 akışları elle uçtan uca çalıştırıldı.
+- [x] IP kontrolünün yalnızca binding etkinken devrede olduğu doğrulandı (BR-023).
+- [x] Regresyon: binding kapalıyken Faz 3–9 davranışları değişmedi.
 
 **Doğrulanacak Sonuçlar:**
 
@@ -367,7 +367,7 @@ Kurallar:
 
 **Checkpoint (Final Review):**
 
-- [ ] requirements.md'deki her FR/NFR/C satırı için ilgili fazın checkpoint'i işaretli; Status alanları güncellendi.
-- [ ] Tüm otomatik testler yeşil (`task backend:test`).
-- [ ] UC-001…UC-017 ana senaryoları temiz bir ortamda (`task infra:up`'tan itibaren) baştan sona elle koşuldu.
-- [ ] README/Taskfile ile projeyi sıfırdan ayağa kaldırma adımları doğrulandı.
+- [x] requirements.md'deki her FR/NFR/C satırı için ilgili fazın checkpoint'i işaretli; Status alanları güncellendi.
+- [x] Tüm otomatik testler yeşil (`task backend:test`).
+- [x] UC-001…UC-017 ana senaryoları temiz bir ortamda (`task infra:up`'tan itibaren) baştan sona elle koşuldu.
+- [x] README/Taskfile ile projeyi sıfırdan ayağa kaldırma adımları doğrulandı.

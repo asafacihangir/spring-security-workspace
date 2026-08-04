@@ -6,7 +6,7 @@
 **Use Case Name:** Expired Token Cleanup
 **Primary Actor:** Öğrenen
 **Goal:** Zamanlanmış arka plan işinin süresi dolmuş kalıcı hatırlanma kayıtlarını sildiğini ve kayıt tablosunun sonsuza kadar büyümediğini gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

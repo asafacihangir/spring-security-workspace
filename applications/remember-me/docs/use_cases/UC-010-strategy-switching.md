@@ -6,7 +6,7 @@
 **Use Case Name:** Strategy Switching
 **Primary Actor:** Öğrenen
 **Goal:** Token-based ve persistent-based remember-me stratejileri arasında yalnızca yapılandırma değiştirerek geçiş yapmak ve iki modun davranış farkını aynı uygulama üzerinde karşılaştırmak
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

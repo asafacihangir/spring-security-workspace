@@ -6,7 +6,7 @@
 **Use Case Name:** IP-Bound Remember-Me
 **Primary Actor:** Öğrenen
 **Goal:** Remember-me token'ının üretildiği istemci IP'sine bağlandığını ve farklı bir IP'den tekrar kullanımının reddedildiğini gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

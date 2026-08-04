@@ -6,7 +6,7 @@
 **Use Case Name:** Remember-Me Opt-In
 **Primary Actor:** Not Kullanıcısı
 **Goal:** Login sırasında "Remember Me" seçeneğini işaretleyerek, oturum sona erse bile hatırlanmayı sağlamak
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

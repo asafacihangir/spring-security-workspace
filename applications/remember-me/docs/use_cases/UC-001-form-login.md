@@ -6,7 +6,7 @@
 **Use Case Name:** Form Login
 **Primary Actor:** Not Kullanıcısı
 **Goal:** Kullanıcı adı ve şifresiyle giriş yaparak kişisel notlarına erişmek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

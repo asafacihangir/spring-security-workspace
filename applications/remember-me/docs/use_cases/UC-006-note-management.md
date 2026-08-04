@@ -6,7 +6,7 @@
 **Use Case Name:** Note Management
 **Primary Actor:** Not Kullanıcısı
 **Goal:** Kişisel notlarını oluşturmak, listelemek, güncellemek ve silmek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

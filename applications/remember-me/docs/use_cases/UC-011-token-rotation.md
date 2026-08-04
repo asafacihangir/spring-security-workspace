@@ -6,7 +6,7 @@
 **Use Case Name:** Token Rotation
 **Primary Actor:** Öğrenen
 **Goal:** Her otomatik girişte kalıcı kaydın token değerinin yenilendiğini, series değerinin ise sabit kaldığını gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

@@ -6,7 +6,7 @@
 **Use Case Name:** Sensitive Page Protection
 **Primary Actor:** Not Kullanıcısı
 **Goal:** Account Settings sayfasına yalnızca tam kimlik doğrulamayla erişmek; hatırlanan bir oturumun hesap bilgilerini değiştirememesini güvence altına almak
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

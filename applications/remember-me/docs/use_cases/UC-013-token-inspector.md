@@ -6,7 +6,7 @@
 **Use Case Name:** Token Inspector
 **Primary Actor:** Öğrenen
 **Goal:** Sunucu tarafındaki kalıcı hatırlanma kayıtlarını (series, token, son kullanım) canlı izleyerek token durumunu takip etmek ve hırsızlık senaryolarını hazırlamak
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

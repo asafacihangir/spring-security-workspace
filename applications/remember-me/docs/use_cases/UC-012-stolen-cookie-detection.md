@@ -6,7 +6,7 @@
 **Use Case Name:** Stolen Cookie Detection
 **Primary Actor:** Öğrenen
 **Goal:** Geçerli series ancak bayat token taşıyan bir isteğin cookie hırsızlığı olarak algılanıp kullanıcının tüm kalıcı hatırlanma kayıtlarının (tüm series'lerinin) iptal edildiğini gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

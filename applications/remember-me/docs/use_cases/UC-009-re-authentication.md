@@ -6,7 +6,7 @@
 **Use Case Name:** Re-Authentication
 **Primary Actor:** Not Kullanıcısı
 **Goal:** Şifresini yeniden girerek hatırlanan oturumunu tam kimlik doğrulamaya yükseltmek ve Account Settings sayfasına erişmek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 

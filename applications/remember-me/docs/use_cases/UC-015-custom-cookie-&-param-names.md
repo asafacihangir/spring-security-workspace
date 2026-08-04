@@ -6,7 +6,7 @@
 **Use Case Name:** Custom Cookie & Param Names
 **Primary Actor:** Öğrenen
 **Goal:** Remember-me cookie'sine ve login formundaki hatırlanma parametresine özel isimler (ör. `notes-rm`, `keep-me`) vererek isimlendirme özelleştirmesini gözlemlemek
-**Status:** Draft
+**Status:** Verified
 
 ## Preconditions
 
