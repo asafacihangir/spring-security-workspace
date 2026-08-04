@@ -1,6 +1,7 @@
 package org.phoenix.rememberme;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -10,9 +11,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 
 /**
- * Faz 1: session-based form login (UC-001).
+ * Faz 1: session-based form login (UC-001). Faz 3 adds token-based
+ * remember-me (UC-002) and an explicit logout endpoint (UC-003).
  *
  * <p>The React SPA posts credentials to {@code /api/login} as a regular
  * {@code x-www-form-urlencoded} body, which Spring Security's built-in
@@ -29,9 +32,42 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
  * <p>CSRF protection is out of scope for this lab (no requirement in
  * requirements.md/plan.md covers it across any phase); it is disabled here
  * rather than half-implemented.
+ *
+ * <p><b>Remember-me (UC-002, FR-002/FR-003):</b> {@code rememberMe()} wires
+ * Spring Security's default {@code TokenBasedRememberMeServices} - a
+ * signed, stateless cookie, not the database-backed persistent-token
+ * variant (that swap is Faz 6's job). Nothing here hardcodes the
+ * "token-based" choice beyond this one DSL call, so Faz 6 can later switch
+ * to {@code .tokenRepository(...)} (persistent tokens) without touching
+ * the login form, the logout config, or the cookie names below.
+ *
+ * <p>The remember-me parameter/cookie name stays Spring's default,
+ * {@value #REMEMBER_ME_PARAMETER} - Faz 9 is what renames these, not this
+ * phase. {@code TokenBasedRememberMeServices} hardcodes
+ * {@code Cookie.setHttpOnly(true)} on the cookie it issues (verified
+ * against the library bytecode, not assumed), so BR-004/NFR-001 holds
+ * without any extra configuration here.
+ *
+ * <p><b>Logout (UC-003, NFR-001):</b> {@code logout()} invalidates the
+ * HTTP session, clears the remember-me authentication/tokens, and deletes
+ * both cookies by name. {@code LogoutFilter} runs earlier in the filter
+ * chain than the authorization check, so {@code POST /api/logout} still
+ * runs every logout handler - including cookie clearing - even when the
+ * session is already invalid server-side (A1): nothing here depends on the
+ * caller being authenticated first.
  */
 @Configuration
 public class SecurityConfig {
+
+    /**
+     * Spring Security's default remember-me request parameter name, which
+     * doubles as the cookie name issued by {@code TokenBasedRememberMeServices}
+     * when no explicit cookie name is set. Named as a constant (rather than
+     * left as an implicit default) so the login form, the security config,
+     * and the logout cookie-clearing list can't silently drift apart -
+     * Faz 9 is expected to replace this constant, not scatter the literal.
+     */
+    static final String REMEMBER_ME_PARAMETER = "remember-me";
 
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -40,11 +76,12 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http,
+            @Value("${app.remember-me.key}") String rememberMeKey) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/health").permitAll()
+                        .requestMatchers("/api/health", "/api/logout").permitAll()
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginProcessingUrl("/api/login")
@@ -63,6 +100,21 @@ public class SecurityConfig {
                             response.getWriter().write("{\"error\":\"Kullanıcı adı veya şifre hatalı.\"}");
                         })
                         .permitAll())
+                .rememberMe(remember -> remember
+                        // BR-003: no `alwaysRemember` - a cookie is only ever issued
+                        // when the request actually carries this parameter with a
+                        // truthy value, i.e. the checkbox was checked.
+                        .key(rememberMeKey)
+                        .rememberMeParameter(REMEMBER_ME_PARAMETER))
+                .logout(logout -> logout
+                        .logoutUrl("/api/logout")
+                        // JSON API, not a server-rendered app: reply with a bare
+                        // status like the login handlers above do, and let the SPA
+                        // decide what "back to the login page" means client-side.
+                        .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler())
+                        .deleteCookies("JSESSIONID", REMEMBER_ME_PARAMETER)
+                        .invalidateHttpSession(true)
+                        .clearAuthentication(true))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
         return http.build();

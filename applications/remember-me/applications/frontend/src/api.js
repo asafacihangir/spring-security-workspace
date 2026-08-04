@@ -25,6 +25,16 @@ export async function apiPostForm(path, fields) {
   return response
 }
 
+// Bodiless POST, used for /logout (UC-003): Spring Security's LogoutFilter
+// only cares about the request method/URL, not a body.
+export async function apiPost(path) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+  })
+  return response
+}
+
 // JSON request helper for the notes CRUD endpoints (UC-006).
 async function apiJson(path, method, body) {
   const response = await fetch(`${BASE_URL}${path}`, {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiGet } from './api'
+import { apiGet, apiPost } from './api'
 import LoginForm from './LoginForm'
 import NotesPage from './NotesPage'
 
@@ -31,12 +31,22 @@ function App() {
     setUsername(body.username)
   }
 
+  // UC-003: the backend has already invalidated the session and cleared
+  // both cookies by the time this resolves. Since this is an SPA (no
+  // server-rendered login page to redirect to), "kullanıcıyı login
+  // sayfasına yönlendirir" means dropping back to the LoginForm branch
+  // below by clearing the known username.
+  async function handleLogout() {
+    await apiPost('/logout')
+    setUsername(null)
+  }
+
   if (checkingSession) {
     return null
   }
 
   return username ? (
-    <NotesPage username={username} />
+    <NotesPage username={username} onLogout={handleLogout} />
   ) : (
     <LoginForm onLoginSuccess={handleLoginSuccess} />
   )

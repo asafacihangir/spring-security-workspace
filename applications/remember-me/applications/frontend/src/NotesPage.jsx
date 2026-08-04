@@ -13,7 +13,7 @@ import { apiDelete, apiGet, apiPostJson, apiPutJson } from './api'
 // A3 (empty title): the backend is the actual enforcement point
 // (NoteController.validate). The check below is a client-side convenience
 // for instant feedback, not something this code relies on for correctness.
-function NotesPage({ username }) {
+function NotesPage({ username, onLogout }) {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState(null)
@@ -111,7 +111,12 @@ function NotesPage({ username }) {
   return (
     <main>
       <h1>Notlarım</h1>
-      <p>Hoş geldin, {username}.</p>
+      <p>
+        Hoş geldin, {username}.{' '}
+        <button type="button" onClick={onLogout}>
+          Çıkış Yap
+        </button>
+      </p>
 
       <form onSubmit={handleSubmit} noValidate>
         <h2>{editingId ? 'Notu Düzenle' : 'Yeni Not'}</h2>
