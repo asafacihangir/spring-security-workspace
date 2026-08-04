@@ -48,6 +48,19 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
  * against the library bytecode, not assumed), so BR-004/NFR-001 holds
  * without any extra configuration here.
  *
+ * <p><b>Auto-login and expiry (Faz 4, UC-004/UC-005):</b> Spring Security's
+ * remember-me filter already performs auto-login on session loss the moment
+ * {@code rememberMe()} is wired up (nothing new to build there); the only
+ * gap this phase closes is making how long a token stays valid a config
+ * value - {@code app.remember-me.token-validity-seconds} - instead of
+ * Spring's hardcoded 14-day default, so it can be turned down for a fast
+ * demo of BR-007 (expired cookie rejection). The resulting auto-login
+ * produces a {@code RememberMeAuthenticationToken}, distinct from the
+ * {@code UsernamePasswordAuthenticationToken} a real form login produces -
+ * that distinction (BR-006) is what Faz 5's Anonymous/Remembered/Fully
+ * Authenticated indicator is built on, though building that indicator
+ * itself is Faz 5's job, not this one's.
+ *
  * <p><b>Logout (UC-003, NFR-001):</b> {@code logout()} invalidates the
  * HTTP session, clears the remember-me authentication/tokens, and deletes
  * both cookies by name. {@code LogoutFilter} runs earlier in the filter
@@ -77,7 +90,8 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http,
-            @Value("${app.remember-me.key}") String rememberMeKey) throws Exception {
+            @Value("${app.remember-me.key}") String rememberMeKey,
+            @Value("${app.remember-me.token-validity-seconds}") int rememberMeTokenValiditySeconds) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
@@ -105,7 +119,12 @@ public class SecurityConfig {
                         // when the request actually carries this parameter with a
                         // truthy value, i.e. the checkbox was checked.
                         .key(rememberMeKey)
-                        .rememberMeParameter(REMEMBER_ME_PARAMETER))
+                        .rememberMeParameter(REMEMBER_ME_PARAMETER)
+                        // Faz 4 (UC-005/BR-007): configurable instead of Spring's
+                        // hardcoded 14-day default, so validity can be turned down
+                        // (e.g. to 30s) to actually observe an expired cookie being
+                        // rejected instead of waiting two weeks for it to happen.
+                        .tokenValiditySeconds(rememberMeTokenValiditySeconds))
                 .logout(logout -> logout
                         .logoutUrl("/api/logout")
                         // JSON API, not a server-rendered app: reply with a bare

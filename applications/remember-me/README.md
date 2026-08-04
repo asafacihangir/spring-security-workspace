@@ -64,6 +64,30 @@ MySQL'in çalışıyor olması gerekir.
 | `task backend:test`| Backend testlerini çalıştırır               |
 | `task frontend:run`| Vite dev server'ı çalıştırır                |
 
+## Session Kaybını Simüle Etme (UC-004, UC-005)
+
+"Remember Me" ile giriş yaptıktan sonra oturum kaybını iki şekilde tetikleyip
+otomatik girişi gözlemleyebilirsin:
+
+1. **`JSESSIONID` cookie'sini silmek:** Tarayıcı DevTools → Application/Storage
+   → Cookies → `JSESSIONID` satırını sil, sayfayı yenile. `remember-me`
+   cookie'si duruyorsa istek yine de kabul edilir (yeni bir session açılır) -
+   yeniden login istenmez.
+2. **Backend'i yeniden başlatmak:** Session'lar bellekte tutulduğu için
+   `task backend:run`'ı durdurup tekrar başlatmak tüm session'ları siler.
+   Remember-me cookie'si bundan etkilenmez, çünkü stateless bir HMAC token'dır
+   (imza `app.remember-me.key`'e bağlıdır, sunucu belleğinde tutulan bir kayıt
+   değildir) - `app.remember-me.key` sabit kaldığı sürece restart sonrası da
+   geçerlidir.
+
+Süresi dolmuş cookie davranışını (UC-005/BR-007) elle gözlemlemek için
+`applications/backend/src/main/resources/application.properties` içindeki
+`app.remember-me.token-validity-seconds`'ı geçici olarak kısalt (ör. `30`),
+backend'i yeniden başlat, "Remember Me" ile giriş yap, süre + birkaç saniye
+bekle, `JSESSIONID`'yi sil ve korumalı bir uca istek at - istek login sayfasına
+düşmeli. Otomatik test kapsamı için bkz.
+`RememberMeAutoLoginAndExpiryTests`.
+
 ## Dokümantasyon
 
 - [vision.md](docs/vision.md) — ürün vizyonu
