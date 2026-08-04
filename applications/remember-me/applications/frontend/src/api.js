@@ -24,3 +24,30 @@ export async function apiPostForm(path, fields) {
   })
   return response
 }
+
+// JSON request helper for the notes CRUD endpoints (UC-006).
+async function apiJson(path, method, body) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return response
+}
+
+export async function apiPostJson(path, body) {
+  return apiJson(path, 'POST', body)
+}
+
+export async function apiPutJson(path, body) {
+  return apiJson(path, 'PUT', body)
+}
+
+export async function apiDelete(path) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
+  return response
+}

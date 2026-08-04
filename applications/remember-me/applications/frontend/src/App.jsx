@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiGet } from './api'
 import LoginForm from './LoginForm'
-import ProtectedPage from './ProtectedPage'
+import NotesPage from './NotesPage'
 
 function App() {
   const [username, setUsername] = useState(null)
@@ -36,7 +36,7 @@ function App() {
   }
 
   return username ? (
-    <ProtectedPage username={username} />
+    <NotesPage username={username} />
   ) : (
     <LoginForm onLoginSuccess={handleLoginSuccess} />
   )
