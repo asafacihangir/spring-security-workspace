@@ -44,11 +44,18 @@ import org.springframework.security.web.authentication.rememberme.RememberMeAuth
  * for.
  *
  * <p><b>IP source: {@code HttpServletRequest.getRemoteAddr()}.</b> Not
- * {@code X-Forwarded-For} or any other proxy header - this app has no
- * reverse proxy in front of it (see the stack constraints in
- * {@code docs/vision.md}/{@code docs/plan.md}), so there is no trusted
- * intermediary rewriting that header; trusting it here would let any caller
- * simply claim whatever IP it likes and defeat the whole point of binding.
+ * {@code X-Forwarded-For} or any other proxy header - {@code infra.yml} (the
+ * only infrastructure this app defines) runs nothing but MySQL, and the
+ * backend/frontend both run directly on the host with no reverse proxy or
+ * load balancer of any kind between a caller and this servlet container, so
+ * there is no trusted intermediary rewriting that header; trusting it here
+ * would let any caller simply claim whatever IP it likes and defeat the
+ * whole point of binding. ({@code docs/vision.md}'s own UC-016 "Independent
+ * Test" suggestion floats {@code X-Forwarded-For} spoofing as one way to
+ * simulate a different IP - that only works if this class actually reads
+ * and trusts that header, which it deliberately does not; see the README's
+ * "IP-Bound Remember-Me" section for what actually works for manual testing
+ * against this {@code getRemoteAddr()}-only design instead.)
  * {@code getRemoteAddr()} is the actual TCP peer address the servlet
  * container observed - not spoofable by the client - which is exactly what
  * BR-023 needs "the IP the record was produced from" to mean.
