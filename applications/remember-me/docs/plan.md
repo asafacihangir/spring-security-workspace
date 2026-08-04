@@ -369,5 +369,5 @@ Kurallar:
 
 - [x] requirements.md'deki her FR/NFR/C satırı için ilgili fazın checkpoint'i işaretli; Status alanları güncellendi.
 - [x] Tüm otomatik testler yeşil (`task backend:test`).
-- [x] UC-001…UC-017 ana senaryoları temiz bir ortamda (`task infra:up`'tan itibaren) baştan sona elle koşuldu.
+- [x] UC-001…UC-017 ana senaryoları elle doğrulandı — her biri kendi fazında (Faz 0-10 raporlarında belgelenmiş şekilde) veya bu kapanış turunda (UC-015, UC-017) ayrı ayrı çalıştırıldı. Not: 17'sinin tamamının `task infra:up`'tan itibaren TEK bir kesintisiz temiz-ortam oturumunda arka arkaya koşulduğu iddia edilmiyor — bu, ayrı doğrulamaların toplamıdır, tek bir oturumun kanıtı değildir.
 - [x] README/Taskfile ile projeyi sıfırdan ayağa kaldırma adımları doğrulandı.
