@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: remember-me-mysql
+    environment:
+      MYSQL_DATABASE: remember_me
+      MYSQL_USER: remember_me
+      MYSQL_PASSWORD: remember_me
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - remember-me-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  remember-me-mysql-data:

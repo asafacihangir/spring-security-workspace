@@ -1,0 +1,31 @@
+version: '3'
+
+tasks:
+  infra:up:
+    desc: Start MySQL via Docker Compose
+    cmds:
+      - docker compose -f infra.yml up -d
+
+  infra:down:
+    desc: Stop MySQL and remove its container
+    cmds:
+      - docker compose -f infra.yml down
+
+  backend:run:
+    desc: Run the Spring Boot backend
+    dir: applications/backend
+    cmds:
+      - ./mvnw spring-boot:run
+
+  backend:test:
+    desc: Run backend tests
+    dir: applications/backend
+    cmds:
+      - ./mvnw test
+
+  frontend:run:
+    desc: Run the Vite dev server
+    dir: applications/frontend
+    cmds:
+      - test -d node_modules || npm install
+      - npm run dev
