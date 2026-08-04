@@ -12,12 +12,14 @@ import org.springframework.security.authentication.AuthenticationTrustResolverIm
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -216,6 +218,11 @@ public class SecurityConfig {
             PersistentTokenRepository persistentTokenRepository,
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy) throws Exception {
+        // Faz 7 fix-round: shared with both .exceptionHandling(...) below and
+        // CookieTheftExceptionTranslationFilter, so a theft replay and every
+        // other unauthenticated request produce byte-for-byte the same 401 -
+        // see that filter's javadoc for why it exists at all.
+        AuthenticationEntryPoint authenticationEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
         http
                 .csrf(csrf -> csrf.disable())
                 .securityContext(securityContext -> securityContext
@@ -289,7 +296,19 @@ public class SecurityConfig {
                         .invalidateHttpSession(true)
                         .clearAuthentication(true))
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+                        .authenticationEntryPoint(authenticationEntryPoint))
+                // Faz 7 fix-round (UC-012): explicit control for
+                // CookieTheftException, which ExceptionTranslationFilter can
+                // never see on its own - RememberMeAuthenticationFilter runs
+                // before it in the default filter order, so an exception
+                // thrown from inside autoLogin() escapes before
+                // ExceptionTranslationFilter gets a turn. Positioned directly
+                // before RememberMeAuthenticationFilter so that filter's call
+                // happens inside THIS filter's own chain.doFilter(...) - see
+                // CookieTheftExceptionTranslationFilter's javadoc for the
+                // full mechanics and why this was needed at all.
+                .addFilterBefore(new CookieTheftExceptionTranslationFilter(authenticationEntryPoint),
+                        RememberMeAuthenticationFilter.class);
         return http.build();
     }
 
