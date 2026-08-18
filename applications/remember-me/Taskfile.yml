@@ -1,0 +1,44 @@
+version: '3'
+
+tasks:
+  infra:up:
+    desc: Start MySQL via Docker Compose
+    cmds:
+      - docker compose -f infra.yml up -d
+
+  infra:down:
+    desc: Stop MySQL and remove its container
+    cmds:
+      - docker compose -f infra.yml down
+
+  tokenbased:start:
+    desc: Run the token-based backend (port 8080)
+    dir: applications/01-tokenbased
+    cmds:
+      - ./mvnw spring-boot:run
+
+  persistentbased:run:
+    desc: Run the persistent-based backend (port 8080)
+    dir: applications/02-persistentbased
+    cmds:
+      - ./mvnw spring-boot:run
+
+  persistentbased:test:
+    desc: Run persistent-based backend tests
+    dir: applications/02-persistentbased
+    cmds:
+      - ./mvnw test
+
+  frontend:run:
+    desc: Run the Vite dev server
+    dir: applications/frontend
+    cmds:
+      - test -d node_modules || npm install
+      - npm run dev
+
+  frontend:build:
+    desc: Build the frontend for production (Vite)
+    dir: applications/frontend
+    cmds:
+      - test -d node_modules || npm install
+      - npm run build
